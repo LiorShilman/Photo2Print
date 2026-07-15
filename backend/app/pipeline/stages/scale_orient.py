@@ -17,13 +17,13 @@ def orientation_score(mesh) -> float:
     normals = mesh.face_normals
     areas = mesh.area_faces
     z = normals[:, 2]
-    # פאות הפונות מטה בזווית תלולה → צריכות support
-    threshold = -np.cos(np.radians(90 - OVERHANG_DEG))
-    overhang_area = float(areas[z < threshold].sum())
-    # שטח מגע משוער: פאות כמעט-אופקיות בגובה המינימלי
     zmin = mesh.bounds[0][2]
     face_z = mesh.triangles_center[:, 2]
     near_bottom = (face_z - zmin) < max(0.5, 0.02 * mesh.extents[2])
+    # פאות הפונות מטה בזווית תלולה → צריכות support.
+    # פאות שנוגעות במשטח אינן overhang — הן שטח ההצמדה.
+    threshold = -np.cos(np.radians(90 - OVERHANG_DEG))
+    overhang_area = float(areas[(z < threshold) & ~near_bottom].sum())
     contact_area = float(areas[near_bottom & (z < -0.9)].sum())
     return overhang_area - 0.5 * contact_area
 

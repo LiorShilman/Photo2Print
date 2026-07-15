@@ -16,9 +16,9 @@ if (-not (Test-Path "$root\.env")) {
     Write-Host "נוצר .env מברירת המחדל — ערוך אותו להוספת מפתחות API" -ForegroundColor Yellow
 }
 
-Write-Host "מפעיל API (http://localhost:8000) ו-UI (http://localhost:5173)..." -ForegroundColor Green
+Write-Host "מפעיל API (http://localhost:8008) ו-UI (http://localhost:5173)..." -ForegroundColor Green
 Start-Process powershell -ArgumentList "-NoExit", "-Command",
-    "& '$root\backend\.venv\Scripts\python.exe' -m uvicorn app.main:app --reload --port 8000 --app-dir '$root\backend'"
+    "& '$root\backend\.venv\Scripts\python.exe' -m uvicorn app.main:app --reload --port 8008 --app-dir '$root\backend'"
 Start-Process powershell -ArgumentList "-NoExit", "-Command",
     "Set-Location '$root\frontend'; npm run dev"
 Start-Sleep 3

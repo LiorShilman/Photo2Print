@@ -28,13 +28,20 @@ def render_previews(mesh_path: Path, out_dir: Path, on_progress) -> list[Path]:
             pass
 
     tris = mesh.triangles
+    # הצללה ידנית: בהירות לפי זווית הנורמל מול כיוון האור
+    light = np.array([0.4, -0.6, 0.7])
+    light = light / np.linalg.norm(light)
+    intensity = 0.35 + 0.65 * np.clip(mesh.face_normals @ light, 0, 1)
+    base = np.array([0x2d, 0xd4, 0xbf]) / 255.0
+    face_colors = np.clip(intensity[:, None] * base[None, :], 0, 1)
+
     outputs = []
     for i, (name, (elev, azim)) in enumerate(VIEWS.items()):
         on_progress(20 + i * 15, f"מרנדר תצוגת {name}…")
         fig = plt.figure(figsize=(6, 6), facecolor="#0d1117")
         ax = fig.add_subplot(111, projection="3d", facecolor="#0d1117")
-        coll = Poly3DCollection(tris, alpha=1.0, facecolor="#2dd4bf",
-                                edgecolor="none", shade=True)
+        coll = Poly3DCollection(tris, alpha=1.0)
+        coll.set_facecolor(face_colors)
         ax.add_collection3d(coll)
         lo, hi = mesh.bounds
         center, radius = (lo + hi) / 2, max(hi - lo) / 2 * 1.1

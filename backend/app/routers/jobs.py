@@ -44,19 +44,21 @@ async def create_job(
     if input_type == "multi_image":
         raise HTTPException(400, "מסלול ריבוי תמונות (פוטוגרמטריה) יגיע בגרסה 1.5")
 
-    job = Job(input_type=input_type, profile_id=profile_id, status="pending")
-    db.add(job)
-    db.flush()
-
+    # קריאת הקבצים לפני יצירת הרשומה — ולידציית גודל מוקדמת
     max_bytes = settings.max_upload_mb * 1024 * 1024
+    payloads: list[tuple[str, bytes]] = []
     for i, f in enumerate(files):
         data = await f.read()
         if len(data) > max_bytes:
             raise HTTPException(413, f"הקובץ {f.filename} גדול מ-{settings.max_upload_mb}MB")
-        safe = f"upload_{i}{Path(f.filename or 'file').suffix.lower()}"
-        save_artifact_bytes(job.id, "upload", safe, data)
+        payloads.append((f"upload_{i}{Path(f.filename or 'file').suffix.lower()}", data))
 
-    db.commit()
+    job = Job(input_type=input_type, profile_id=profile_id, status="pending")
+    db.add(job)
+    db.commit()  # הארטיפקטים נשמרים בסשן נפרד — הג'וב חייב להיות persist קודם (FK)
+
+    for safe, data in payloads:
+        save_artifact_bytes(job.id, "upload", safe, data)
     enqueue(runner.run_generation, job.id)
     return _job_out(db, job.id)
 
@@ -110,11 +112,10 @@ def duplicate_job(job_id: str, db: Session = Depends(get_db)):
     new = Job(input_type=src.input_type, profile_id=src.profile_id,
               scale_json=src.scale_json, status="pending")
     db.add(new)
-    db.flush()
+    db.commit()  # persist לפני שמירת ארטיפקטים בסשן נפרד (FK)
     uploads = db.query(Artifact).filter_by(job_id=job_id, kind="upload").all()
     for art in uploads:
         save_artifact_bytes(new.id, "upload", art.filename, artifact_path(art).read_bytes())
-    db.commit()
     enqueue(runner.run_generation, new.id)
     return new
 

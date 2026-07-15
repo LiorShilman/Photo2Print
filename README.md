@@ -14,7 +14,7 @@ STL מתוקן ואטום → G-code מוכן למדפסת → דוח עלויו
 
 הסקריפט מתקין הכל בפעם הראשונה (venv + npm) ופותח:
 - **UI:** http://localhost:5173 (עברית RTL, dark mode)
-- **API:** http://localhost:8000 (OpenAPI: `/docs`)
+- **API:** http://localhost:8008 (OpenAPI: `/docs`)
 
 דרישות: Python 3.12+, Node 18+. PrusaSlicer CLI כלול ב-`tools/` (מורד אוטומטית).
 
