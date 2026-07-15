@@ -16,6 +16,7 @@ fast-simplification>=0.1.9
 scikit-image>=0.24
 filetype>=1.2
 jinja2>=3.1
+lxml>=5.0
 matplotlib>=3.9
 rembg>=2.0.60
 onnxruntime>=1.20

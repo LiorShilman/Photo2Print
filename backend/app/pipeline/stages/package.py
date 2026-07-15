@@ -221,6 +221,17 @@ def run(ctx: StageContext) -> dict:
     for p in previews:
         save_artifact(ctx.job_id, "preview", p)
 
+    # ייצוא 3MF של המודל הסופי (PRD §5.8) — כולל הסקייל והאוריינטציה שהוחלו
+    ctx.progress(60, "מייצא 3MF…")
+    try:
+        import trimesh
+        m3 = trimesh.load(str(artifact_path(mesh_final)), force="mesh")
+        p3mf = ctx.work_dir / "model_repaired.3mf"
+        m3.export(p3mf)
+        save_artifact(ctx.job_id, "mesh_3mf", p3mf)
+    except Exception:
+        pass  # 3MF משני ל-STL — לא מכשיל אריזה
+
     ctx.progress(65, "מפיק דוח הדפסה…")
     report_html = build_report_html(job, stages, stats, gates)
     report_path = ctx.work_dir / "print_report.html"
@@ -248,6 +259,7 @@ def run(ctx: StageContext) -> dict:
                 z.write(artifact_path(art), arcname)
 
         _add("mesh_final", "model/model_repaired.stl")
+        _add("mesh_3mf", "model/model_repaired.3mf")
         _add("mesh_raw", "model/model_original_raw" + Path(latest_artifact(ctx.job_id, 'mesh_raw').filename).suffix)
         # כל קבצי ה-G-code (מודל שלם או ריבוי חלקים) — dedupe לפי שם, החדש גובר
         from ...models import Artifact
