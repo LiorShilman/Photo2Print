@@ -132,6 +132,9 @@ export const api = {
   async listProfiles(): Promise<Profile[]> {
     return (await check(await fetch("/api/v1/profiles"))).json();
   },
+  async gcodeLayers(jobId: string): Promise<{ layers: { z: number; segments: number[][] }[]; count: number }> {
+    return (await check(await fetch(`/api/v1/jobs/${jobId}/gcode_layers`))).json();
+  },
   artifactUrl(id: string): string {
     return `/api/v1/artifacts/${id}`;
   },
@@ -145,9 +148,10 @@ export function latestArtifact(job: Job, kind: string): Artifact | undefined {
 }
 
 export function thumbnailArtifact(job: Job): Artifact | undefined {
-  // תמונה ממוזערת עקבית: תצוגת front > כל preview סטטי אחר (לא GIF)
+  // תמונה ממוזערת עקבית: hero איזומטרי > front > כל preview סטטי אחר (לא GIF)
   const previews = job.artifacts.filter((a) => a.kind === "preview");
   return (
+    previews.find((a) => a.filename.includes("iso")) ??
     previews.find((a) => a.filename.includes("front")) ??
     previews.find((a) => a.filename.endsWith(".png"))
   );

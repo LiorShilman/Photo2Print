@@ -7,6 +7,7 @@ import { useJobProgress } from "../hooks/useJobProgress";
 import Viewer3D from "../components/Viewer3D";
 import GatesRow from "../components/GatesRow";
 import GcodePreview from "../components/GcodePreview";
+import Lightbox from "../components/Lightbox";
 
 const STAGE_HE: [string, string][] = [
   ["ingest", "קליטה ואימות"],
@@ -301,7 +302,25 @@ function ResultsView({ job }: { job: Job }) {
   const { data: profiles } = useQuery({ queryKey: ["profiles"], queryFn: api.listProfiles });
   const profile = profiles?.find((p) => p.id === job.profile_id);
   const [showSlice, setShowSlice] = useState(false);
+  const [lightbox, setLightbox] = useState<string | null>(null);
   const qc = useQueryClient();
+
+  // מיפוי החלפות צבע (שכבה) → גובה Z לצביעת המודל התלת-ממדי
+  const { data: layersData } = useQuery({
+    queryKey: ["gcode_layers", job.id],
+    queryFn: () => api.gcodeLayers(job.id),
+    enabled: !!stats?.color_changes?.length,
+    staleTime: Infinity,
+  });
+  const colorZones = useMemo(() => {
+    const ls = layersData?.layers;
+    const cc = stats?.color_changes;
+    if (!ls?.length || !cc?.length) return undefined;
+    return cc.map((c) => ({
+      z: ls[Math.min(Math.max(c.layer - 1, 0), ls.length - 1)].z,
+      color: c.color,
+    }));
+  }, [layersData, stats?.color_changes]);
 
   // slice מחדש עם החלפות צבע (M600) — שומר את שאר הפרמטרים מהריצה האחרונה
   const applyColors = useMutation({
@@ -371,21 +390,23 @@ function ResultsView({ job }: { job: Job }) {
         </div>
         {previews.length > 0 && (
           <div>
-            <h2>תצוגות מקדימות</h2>
+            <h2>תצוגות מקדימות <span className="muted" style={{ fontSize: "0.8rem", fontWeight: 400 }}>· לחץ להגדלה</span></h2>
             <div className="stat-cards" style={{ gridTemplateColumns: "repeat(2, 1fr)", margin: 0 }}>
               {previews.map((p) => (
                 <img key={p.id} src={api.artifactUrl(p.id)} alt={p.filename}
-                     style={{ width: "100%", borderRadius: 12, border: "1px solid var(--border)" }} />
+                     onClick={() => setLightbox(api.artifactUrl(p.id))}
+                     style={{ width: "100%", borderRadius: 12, border: "1px solid var(--border)", cursor: "zoom-in" }} />
               ))}
             </div>
           </div>
         )}
       </div>
+      {lightbox && <Lightbox src={lightbox} onClose={() => setLightbox(null)} />}
 
       {mesh && (
         <>
-          <h2>המודל הסופי</h2>
-          <Viewer3D stlUrl={api.artifactUrl(mesh.id)} />
+          <h2>המודל הסופי {stats?.color_changes?.length ? "· צבוע לפי החלפות 🎨" : ""}</h2>
+          <Viewer3D stlUrl={api.artifactUrl(mesh.id)} colorZones={colorZones} />
         </>
       )}
     </>

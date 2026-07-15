@@ -9,10 +9,16 @@ import numpy as np
 from ...storage import artifact_path, latest_artifact, save_artifact
 from ..context import StageContext
 
-VIEWS = {"front": (0, 0), "side": (0, 90), "top": (89, 0)}
+VIEWS = {"iso": (28, 45), "front": (0, 0), "side": (0, 90), "top": (89, 0)}
 
 
-def render_previews(mesh_path: Path, out_dir: Path, on_progress) -> list[Path]:
+def _hex_rgb(hex_color: str) -> "np.ndarray":
+    h = hex_color.lstrip("#")
+    return np.array([int(h[i:i + 2], 16) for i in (0, 2, 4)]) / 255.0
+
+
+def render_previews(mesh_path: Path, out_dir: Path, on_progress,
+                    zones: list[dict] | None = None) -> list[Path]:
     """רנדור סטטי headless עם matplotlib — עמיד יותר מ-GL בשרת ללא תצוגה."""
     import matplotlib
     matplotlib.use("Agg")
@@ -33,7 +39,14 @@ def render_previews(mesh_path: Path, out_dir: Path, on_progress) -> list[Path]:
     light = light / np.linalg.norm(light)
     intensity = 0.35 + 0.65 * np.clip(mesh.face_normals @ light, 0, 1)
     base = np.array([0x81, 0x8c, 0xf8]) / 255.0  # אינדיגו — תואם לפלטת ה-UI
-    face_colors = np.clip(intensity[:, None] * base[None, :], 0, 1)
+
+    # צבע בסיס פר-פאה: אם יש אזורי M600 — לפי גובה מרכז הפאה
+    face_base = np.tile(base, (len(tris), 1))
+    if zones:
+        centers_z = mesh.triangles_center[:, 2]
+        for zone in sorted(zones, key=lambda s: s["z"]):
+            face_base[centers_z >= zone["z"] - 1e-4] = _hex_rgb(zone["color"])
+    face_colors = np.clip(intensity[:, None] * face_base, 0, 1)
 
     def _render(elev: float, azim: float, out: Path, size: float = 6, dpi: int = 100):
         fig = plt.figure(figsize=(size, size), facecolor="#131622")
@@ -171,8 +184,23 @@ def run(ctx: StageContext) -> dict:
 
     mesh_final = latest_artifact(ctx.job_id, "mesh_final") or latest_artifact(ctx.job_id, "mesh_repaired")
 
+    # אזורי צבע (M600) — מיפוי שכבה→גובה Z לצביעת הרנדורים
+    zones: list[dict] = []
+    gcode_for_zones = latest_artifact(ctx.job_id, "gcode")
+    if gcode_for_zones and stats.get("color_changes"):
+        from ..gcode_preview import parse_layers
+        try:
+            layer_zs = [l["z"] for l in parse_layers(artifact_path(gcode_for_zones),
+                                                     max_segments_per_layer=4)]
+            for c in stats["color_changes"]:
+                idx = min(max(int(c["layer"]) - 1, 0), len(layer_zs) - 1)
+                zones.append({"z": layer_zs[idx], "color": c["color"]})
+        except Exception:
+            pass  # צביעה היא שיפור ויזואלי — לא מכשילה אריזה
+
     ctx.progress(10, "מרנדר תצוגות מקדימות…")
-    previews = render_previews(artifact_path(mesh_final), ctx.work_dir, ctx.progress)
+    previews = render_previews(artifact_path(mesh_final), ctx.work_dir, ctx.progress,
+                               zones=zones or None)
 
     # שכבה ראשונה מה-G-code — קריטי לאבחון הצמדות (PRD §5.8)
     gcode_art = latest_artifact(ctx.job_id, "gcode")

@@ -6,13 +6,18 @@ import { Grid, OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
 import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
 
+export interface ColorZone { z: number; color: string }  // מ-z ומעלה — הצבע הזה
+
 interface Props {
   stlUrl: string;
   bed?: { x: number; y: number; z: number };
   targetHeightMm?: number;      // סקייל חי לפי קלט המשתמש
   scaleAxis?: "x" | "y" | "z";
   rotationDeg?: [number, number, number];  // סיבוב ידני (F-5.5)
+  colorZones?: ColorZone[];     // אזורי צבע מהחלפות M600
 }
+
+const BASE_MODEL_COLOR = "#818cf8";
 
 function useStl(url: string) {
   const [geo, setGeo] = useState<THREE.BufferGeometry | null>(null);
@@ -29,10 +34,28 @@ function useStl(url: string) {
   return geo;
 }
 
-function ModelMesh({ geo, targetMm, axis, rotationDeg }: {
+function ModelMesh({ geo, targetMm, axis, rotationDeg, colorZones }: {
   geo: THREE.BufferGeometry; targetMm?: number; axis: "x" | "y" | "z";
   rotationDeg?: [number, number, number];
+  colorZones?: ColorZone[];
 }) {
+  // צביעת vertices לפי גובה Z — משקף את החלפות ה-M600 על המודל עצמו
+  const colored = useMemo(() => {
+    if (!colorZones?.length) return false;
+    const pos = geo.attributes.position;
+    const colors = new Float32Array(pos.count * 3);
+    const zones = [...colorZones].sort((a, b) => a.z - b.z);
+    const palette = [new THREE.Color(BASE_MODEL_COLOR), ...zones.map((s) => new THREE.Color(s.color))];
+    for (let i = 0; i < pos.count; i++) {
+      const z = pos.getZ(i);
+      let idx = 0;
+      for (let k = 0; k < zones.length; k++) if (z >= zones[k].z - 1e-4) idx = k + 1;
+      const c = palette[idx];
+      colors[i * 3] = c.r; colors[i * 3 + 1] = c.g; colors[i * 3 + 2] = c.b;
+    }
+    geo.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+    return true;
+  }, [geo, colorZones]);
   const { scale, offset } = useMemo(() => {
     // הסיבוב מוחל על הגיאומטריה לפני חישוב הסקייל וההנחה על המשטח,
     // כדי שהתצוגה תתאים למה שהשרת יבצע (סיבוב → סקייל → הנחה)
@@ -60,13 +83,15 @@ function ModelMesh({ geo, targetMm, axis, rotationDeg }: {
   return (
     <group position={offset.toArray()} scale={[scale, scale, scale]}>
       <mesh geometry={geo} rotation={[rx, ry, rz]}>
-        <meshStandardMaterial color="#818cf8" metalness={0.15} roughness={0.45} />
+        {colored
+          ? <meshStandardMaterial vertexColors color="#ffffff" metalness={0.15} roughness={0.45} />
+          : <meshStandardMaterial color={BASE_MODEL_COLOR} metalness={0.15} roughness={0.45} />}
       </mesh>
     </group>
   );
 }
 
-export default function Viewer3D({ stlUrl, bed, targetHeightMm, scaleAxis = "z", rotationDeg }: Props) {
+export default function Viewer3D({ stlUrl, bed, targetHeightMm, scaleAxis = "z", rotationDeg, colorZones }: Props) {
   const geo = useStl(stlUrl);
   const bedX = bed?.x ?? 220;
   const bedY = bed?.y ?? 220;
@@ -105,7 +130,7 @@ export default function Viewer3D({ stlUrl, bed, targetHeightMm, scaleAxis = "z",
           fadeDistance={1200} infiniteGrid={false}
         />
         <Suspense fallback={null}>
-          {geo && <ModelMesh geo={geo} targetMm={targetHeightMm} axis={scaleAxis} rotationDeg={rotationDeg} />}
+          {geo && <ModelMesh geo={geo} targetMm={targetHeightMm} axis={scaleAxis} rotationDeg={rotationDeg} colorZones={colorZones} />}
         </Suspense>
         <OrbitControls makeDefault target={[0, 0, 30]} />
       </Canvas>

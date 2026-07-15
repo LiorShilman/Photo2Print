@@ -45,16 +45,20 @@ export default function GcodePreview({ jobId, bed, colorChanges = [], onApplyCol
     if (layers.length) setLayerIdx((i) => Math.min(i, layers.length - 1));
   }, [layers.length]);
 
+  // תמיד מתמקדים במודל (לא בכל המשטח) — המשטח מצויר כהקשר בלבד
   const bounds = useMemo(() => {
-    if (bed) return { minX: 0, minY: 0, maxX: bed.x, maxY: bed.y };
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
     for (const l of layers) for (const s of l.segments) {
       minX = Math.min(minX, s[0], s[2]); maxX = Math.max(maxX, s[0], s[2]);
       minY = Math.min(minY, s[1], s[3]); maxY = Math.max(maxY, s[1], s[3]);
     }
-    const pad = 10;
+    const pad = Math.max(8, (maxX - minX) * 0.08);
     return { minX: minX - pad, minY: minY - pad, maxX: maxX + pad, maxY: maxY + pad };
-  }, [layers, bed]);
+  }, [layers]);
+
+  // זום (גלגלת) + גרירה (pan) + איפוס בלחיצה כפולה
+  const [view, setView] = useState({ k: 1, ox: 0, oy: 0 });
+  const dragRef = useRef<{ x: number; y: number } | null>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -62,9 +66,9 @@ export default function GcodePreview({ jobId, bed, colorChanges = [], onApplyCol
     const ctx = canvas.getContext("2d")!;
     const W = canvas.width, H = canvas.height;
     const spanX = bounds.maxX - bounds.minX, spanY = bounds.maxY - bounds.minY;
-    const scale = Math.min(W / spanX, H / spanY);
-    const toX = (x: number) => (x - bounds.minX) * scale + (W - spanX * scale) / 2;
-    const toY = (y: number) => H - ((y - bounds.minY) * scale + (H - spanY * scale) / 2);
+    const scale = Math.min(W / spanX, H / spanY) * view.k;
+    const toX = (x: number) => (x - bounds.minX) * scale + (W - spanX * scale) / 2 + view.ox;
+    const toY = (y: number) => H - ((y - bounds.minY) * scale + (H - spanY * scale) / 2) + view.oy;
 
     ctx.fillStyle = "#141827";
     ctx.fillRect(0, 0, W, H);
@@ -87,8 +91,8 @@ export default function GcodePreview({ jobId, bed, colorChanges = [], onApplyCol
     };
 
     if (layerIdx > 0) draw(layers[layerIdx - 1], zoneColor(layerIdx - 1, pending) + "33", 1);
-    draw(layers[layerIdx], zoneColor(layerIdx, pending), 1.6);
-  }, [layers, layerIdx, bounds, bed, pending]);
+    draw(layers[layerIdx], zoneColor(layerIdx, pending), 1.8);
+  }, [layers, layerIdx, bounds, bed, pending, view]);
 
   if (isLoading) return <p className="muted">טוען שכבות…</p>;
   if (!layers.length) return null;
@@ -97,7 +101,30 @@ export default function GcodePreview({ jobId, bed, colorChanges = [], onApplyCol
 
   return (
     <div className="card" style={{ direction: "ltr" }}>
-      <canvas ref={canvasRef} width={560} height={560} style={{ width: "100%", borderRadius: 10 }} />
+      <canvas
+        ref={canvasRef} width={1000} height={1000}
+        style={{ width: "100%", borderRadius: 10, cursor: dragRef.current ? "grabbing" : "grab", touchAction: "none" }}
+        onWheel={(e) => {
+          const factor = e.deltaY < 0 ? 1.15 : 0.87;
+          setView((v) => ({ ...v, k: Math.min(12, Math.max(0.4, v.k * factor)) }));
+        }}
+        onPointerDown={(e) => {
+          dragRef.current = { x: e.clientX, y: e.clientY };
+          (e.target as HTMLElement).setPointerCapture(e.pointerId);
+        }}
+        onPointerMove={(e) => {
+          if (!dragRef.current) return;
+          const canvas = canvasRef.current!;
+          const px = canvas.width / canvas.getBoundingClientRect().width;
+          const dx = (e.clientX - dragRef.current.x) * px;
+          const dy = (e.clientY - dragRef.current.y) * px;
+          dragRef.current = { x: e.clientX, y: e.clientY };
+          setView((v) => ({ ...v, ox: v.ox + dx, oy: v.oy + dy }));
+        }}
+        onPointerUp={() => { dragRef.current = null; }}
+        onDoubleClick={() => setView({ k: 1, ox: 0, oy: 0 })}
+        title="גלגלת = זום · גרירה = הזזה · לחיצה כפולה = איפוס"
+      />
       <div style={{ direction: "rtl", marginTop: "0.6rem" }}>
         <label>
           שכבה {layerIdx + 1} מתוך {layers.length} · גובה{" "}
