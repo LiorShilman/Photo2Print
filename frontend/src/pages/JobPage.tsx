@@ -8,6 +8,7 @@ import Viewer3D from "../components/Viewer3D";
 import GatesRow from "../components/GatesRow";
 import GcodePreview from "../components/GcodePreview";
 import Lightbox from "../components/Lightbox";
+import Select from "../components/Select";
 
 const STAGE_HE: [string, string][] = [
   ["ingest", "קליטה ואימות"],
@@ -171,21 +172,27 @@ function ScaleView({ job }: { job: Job }) {
         <div className="card">
           <h3 style={{ marginTop: 0 }}>📐 קביעת מידות</h3>
           <label>ציר מוביל</label>
-          <select value={axis} onChange={(e) => setAxis(e.target.value as "x" | "y" | "z")}>
-            <option value="z">גובה (Z)</option>
-            <option value="x">רוחב (X)</option>
-            <option value="y">עומק (Y)</option>
-          </select>
+          <Select value={axis} onChange={(v) => setAxis(v as "x" | "y" | "z")}
+                  options={[
+                    { value: "z", label: "גובה (Z)" },
+                    { value: "x", label: "רוחב (X)" },
+                    { value: "y", label: "עומק (Y)" },
+                  ]} />
           <label style={{ marginTop: "0.7rem" }}>מידה במ"מ</label>
           <input type="number" min={5} max={500} value={sizeMm}
                  onChange={(e) => setSizeMm(Number(e.target.value))} style={{ width: "100%" }} />
           <input type="range" min={10} max={300} value={sizeMm}
                  onChange={(e) => setSizeMm(Number(e.target.value))} style={{ width: "100%" }} />
           <label style={{ marginTop: "0.7rem" }}>מדפסת (לבדיקת נפח)</label>
-          <select value={profileId || job.profile_id || ""} onChange={(e) => setProfileId(e.target.value)}>
-            <option value="">— ללא —</option>
-            {profiles?.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </select>
+          <Select value={profileId || job.profile_id || ""} onChange={setProfileId}
+                  placeholder="— ללא —"
+                  options={[
+                    { value: "", label: "— ללא —" },
+                    ...(profiles ?? []).map((p) => ({
+                      value: p.id, label: p.name,
+                      hint: `${p.bed_x}×${p.bed_y}×${p.bed_z}`,
+                    })),
+                  ]} />
           <label style={{ marginTop: "0.7rem" }}>סיבוב ידני (snap 15°)</label>
           <div style={{ display: "flex", flexDirection: "column", gap: "0.3rem" }}>
             <RotationControl label="X" value={rot[0]} onChange={(v) => setRot([v, rot[1], rot[2]])} />
@@ -245,20 +252,25 @@ function SliceView({ job }: { job: Job }) {
         <div className="card">
           <h3 style={{ marginTop: 0 }}>🔪 הגדרות Slicing</h3>
           <label>מדפסת</label>
-          <select value={profileId} onChange={(e) => setProfileId(e.target.value)} style={{ width: "100%" }}>
-            <option value="">בחר מדפסת…</option>
-            {profiles?.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </select>
+          <Select value={profileId} onChange={setProfileId} placeholder="בחר מדפסת…"
+                  options={(profiles ?? []).map((p) => ({
+                    value: p.id, label: p.name,
+                    hint: `${p.bed_x}×${p.bed_y}×${p.bed_z}`,
+                  }))} />
           <label style={{ marginTop: "0.7rem" }}>פריסט איכות</label>
-          <select value={preset} onChange={(e) => setPreset(e.target.value as typeof preset)} style={{ width: "100%" }}>
-            <option value="draft">Draft — 0.28 מ"מ (מהיר)</option>
-            <option value="standard">Standard — 0.2 מ"מ</option>
-            <option value="quality">Quality — 0.12 מ"מ (איטי ומדויק)</option>
-          </select>
+          <Select value={preset} onChange={(v) => setPreset(v as typeof preset)}
+                  options={[
+                    { value: "draft", label: "Draft — מהיר", hint: "0.28mm" },
+                    { value: "standard", label: "Standard", hint: "0.2mm" },
+                    { value: "quality", label: "Quality — מדויק", hint: "0.12mm" },
+                  ]} />
           <label style={{ marginTop: "0.7rem" }}>חומר</label>
-          <select value={material} onChange={(e) => setMaterial(e.target.value as typeof material)} style={{ width: "100%" }}>
-            <option>PLA</option><option>PETG</option><option>TPU</option>
-          </select>
+          <Select value={material} onChange={(v) => setMaterial(v as typeof material)}
+                  options={[
+                    { value: "PLA", label: "PLA" },
+                    { value: "PETG", label: "PETG" },
+                    { value: "TPU", label: "TPU (גמיש)" },
+                  ]} />
 
           <label style={{ marginTop: "0.9rem" }}>
             <input type="checkbox" checked={advanced} onChange={(e) => setAdvanced(e.target.checked)} /> מצב Advanced
@@ -269,11 +281,12 @@ function SliceView({ job }: { job: Job }) {
               <input type="range" min={0} max={60} value={adv.infill_pct}
                      onChange={(e) => setAdv({ ...adv, infill_pct: Number(e.target.value) })} style={{ width: "100%" }} />
               <label style={{ marginTop: "0.5rem" }}>Supports</label>
-              <select value={adv.supports} onChange={(e) => setAdv({ ...adv, supports: e.target.value })} style={{ width: "100%" }}>
-                <option value="auto">אוטומטי</option>
-                <option value="tree">Tree (אורגני)</option>
-                <option value="off">כבוי</option>
-              </select>
+              <Select value={adv.supports} onChange={(v) => setAdv({ ...adv, supports: v })}
+                      options={[
+                        { value: "auto", label: "אוטומטי" },
+                        { value: "tree", label: "Tree (אורגני)" },
+                        { value: "off", label: "כבוי" },
+                      ]} />
               <label style={{ marginTop: "0.5rem" }}>
                 <input type="checkbox" checked={adv.brim} onChange={(e) => setAdv({ ...adv, brim: e.target.checked })} /> Brim (הצמדות)
               </label>
