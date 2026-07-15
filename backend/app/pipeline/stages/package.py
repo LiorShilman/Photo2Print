@@ -32,12 +32,12 @@ def render_previews(mesh_path: Path, out_dir: Path, on_progress) -> list[Path]:
     light = np.array([0.4, -0.6, 0.7])
     light = light / np.linalg.norm(light)
     intensity = 0.35 + 0.65 * np.clip(mesh.face_normals @ light, 0, 1)
-    base = np.array([0x2d, 0xd4, 0xbf]) / 255.0
+    base = np.array([0x81, 0x8c, 0xf8]) / 255.0  # אינדיגו — תואם לפלטת ה-UI
     face_colors = np.clip(intensity[:, None] * base[None, :], 0, 1)
 
     def _render(elev: float, azim: float, out: Path, size: float = 6, dpi: int = 100):
-        fig = plt.figure(figsize=(size, size), facecolor="#0d1117")
-        ax = fig.add_subplot(111, projection="3d", facecolor="#0d1117")
+        fig = plt.figure(figsize=(size, size), facecolor="#131622")
+        ax = fig.add_subplot(111, projection="3d", facecolor="#131622")
         coll = Poly3DCollection(tris, alpha=1.0)
         coll.set_facecolor(face_colors)
         ax.add_collection3d(coll)
@@ -50,7 +50,7 @@ def render_previews(mesh_path: Path, out_dir: Path, on_progress) -> list[Path]:
         ax.view_init(elev=elev, azim=azim)
         ax.set_axis_off()
         fig.subplots_adjust(left=0, right=1, top=1, bottom=0)
-        fig.savefig(out, dpi=dpi, bbox_inches="tight", facecolor="#0d1117")
+        fig.savefig(out, dpi=dpi, bbox_inches="tight", facecolor="#131622")
         plt.close(fig)
 
     outputs = []
@@ -84,14 +84,14 @@ def build_report_html(job, stages, stats: dict, gates: dict) -> str:
 <html dir="rtl" lang="he"><head><meta charset="utf-8">
 <title>דוח הדפסה — {{ job_id }}</title>
 <style>
- body{background:#0d1117;color:#e6edf3;font-family:'Segoe UI',Arial,sans-serif;max-width:860px;margin:2rem auto;padding:0 1rem}
- h1{color:#2dd4bf} h2{border-bottom:1px solid #30363d;padding-bottom:.3rem;margin-top:2rem}
- table{width:100%;border-collapse:collapse;background:#161b22;border-radius:8px}
- td,th{padding:.55rem .8rem;border-bottom:1px solid #21262d;text-align:right}
+ body{background:#131622;color:#e4e7f1;font-family:'Segoe UI',Arial,sans-serif;max-width:860px;margin:2rem auto;padding:0 1rem}
+ h1{color:#818cf8} h2{border-bottom:1px solid #2a3046;padding-bottom:.3rem;margin-top:2rem}
+ table{width:100%;border-collapse:collapse;background:#1b1f2e;border-radius:8px}
+ td,th{padding:.55rem .8rem;border-bottom:1px solid #262c3f;text-align:right}
  .pass{color:#3fb950}.warn{color:#f59e0b}.fail{color:#ef4444}
  .cards{display:flex;gap:1rem;flex-wrap:wrap;margin:1rem 0}
- .card{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:1rem 1.4rem;min-width:150px}
- .card b{display:block;font-size:1.5rem;color:#2dd4bf}
+ .card{background:#1b1f2e;border:1px solid #2a3046;border-radius:10px;padding:1rem 1.4rem;min-width:150px}
+ .card b{display:block;font-size:1.5rem;color:#818cf8}
  .mono{font-family:'JetBrains Mono',Consolas,monospace;direction:ltr;display:inline-block}
 </style></head><body>
 <h1>🖨️ Photo2Print — דוח הדפסה</h1>
@@ -126,7 +126,7 @@ def build_report_html(job, stages, stats: dict, gates: dict) -> str:
  <tr><td>{{ s.idx }}</td><td>{{ s.name }}</td><td class="{{ 'pass' if s.status=='done' else 'fail' }}">{{ s.status }}</td><td class="mono">{{ s.duration }}</td></tr>
 {% endfor %}
 </table>
-<p style="color:#8b949e;margin-top:2rem">נוצר אוטומטית על ידי Photo2Print · מדיניות אפס-ניחושים: אף קובץ לא נארז בלי מעבר של כל השערים.</p>
+<p style="color:#96a0b8;margin-top:2rem">נוצר אוטומטית על ידי Photo2Print · מדיניות אפס-ניחושים: אף קובץ לא נארז בלי מעבר של כל השערים.</p>
 </body></html>""")
 
     t = stats.get("time_s", 0)

@@ -87,15 +87,15 @@ def render_first_layer_png(gcode_path: Path, out_path: Path, bed: tuple[float, f
         return False
     segs = [[(s[0], s[1]), (s[2], s[3])] for s in layers[0]["segments"]]
 
-    fig, ax = plt.subplots(figsize=(6, 6), facecolor="#0d1117")
-    ax.set_facecolor("#0d1117")
-    ax.add_collection(LineCollection(segs, colors="#2dd4bf", linewidths=1.2))
+    fig, ax = plt.subplots(figsize=(6, 6), facecolor="#131622")
+    ax.set_facecolor("#131622")
+    ax.add_collection(LineCollection(segs, colors="#8b93ff", linewidths=1.2))
     ax.plot([0, bed[0], bed[0], 0, 0], [0, 0, bed[1], bed[1], 0],
-            color="#30363d", linewidth=1)
+            color="#2a3046", linewidth=1)
     ax.set_xlim(-5, bed[0] + 5)
     ax.set_ylim(-5, bed[1] + 5)
     ax.set_aspect("equal")
     ax.axis("off")
-    fig.savefig(out_path, dpi=110, bbox_inches="tight", facecolor="#0d1117")
+    fig.savefig(out_path, dpi=110, bbox_inches="tight", facecolor="#131622")
     plt.close(fig)
     return True

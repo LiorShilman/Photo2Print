@@ -46,11 +46,11 @@ export default function GcodePreview({ jobId, bed }: { jobId: string; bed?: { x:
     const toX = (x: number) => (x - bounds.minX) * scale + (W - spanX * scale) / 2;
     const toY = (y: number) => H - ((y - bounds.minY) * scale + (H - spanY * scale) / 2);
 
-    ctx.fillStyle = "#0d1117";
+    ctx.fillStyle = "#141827";
     ctx.fillRect(0, 0, W, H);
 
     if (bed) { // מסגרת משטח
-      ctx.strokeStyle = "#30363d";
+      ctx.strokeStyle = "#2a3046";
       ctx.lineWidth = 1;
       ctx.strokeRect(toX(0), toY(bed.y), bed.x * scale, bed.y * scale);
     }
@@ -66,8 +66,8 @@ export default function GcodePreview({ jobId, bed }: { jobId: string; bed?: { x:
       ctx.stroke();
     };
 
-    if (layerIdx > 0) draw(layers[layerIdx - 1], "#2dd4bf33", 1); // שכבה קודמת — עמומה
-    draw(layers[layerIdx], "#2dd4bf", 1.6);
+    if (layerIdx > 0) draw(layers[layerIdx - 1], "#818cf833", 1); // שכבה קודמת — עמומה
+    draw(layers[layerIdx], "#8b93ff", 1.6);
   }, [layers, layerIdx, bounds, bed]);
 
   if (isLoading) return <p className="muted">טוען שכבות…</p>;

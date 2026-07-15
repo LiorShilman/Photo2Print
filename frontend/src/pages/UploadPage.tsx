@@ -46,42 +46,45 @@ export default function UploadPage() {
         <button className={tab === "mesh" ? "active" : ""} onClick={() => setTab("mesh")}>🧊 קובץ 3D קיים</button>
       </div>
 
-      {tab === "multi" ? (
-        <div className="card" style={{ textAlign: "center", padding: "3rem" }}>
-          <p>מסלול פוטוגרמטריה (20–50 תמונות מזוויות שונות) יגיע בגרסה 1.5 עם Meshroom.</p>
+      <div className="split-2">
+        <div>
+          {tab === "multi" ? (
+            <div className="card" style={{ textAlign: "center", padding: "3rem" }}>
+              <p>מסלול פוטוגרמטריה (20–50 תמונות מזוויות שונות) יגיע בגרסה 1.5 עם Meshroom.</p>
+            </div>
+          ) : (
+            <div
+              className={`dropzone ${drag ? "drag" : ""}`}
+              onClick={() => inputRef.current?.click()}
+              onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
+              onDragLeave={() => setDrag(false)}
+              onDrop={(e) => { e.preventDefault(); setDrag(false); onFiles(e.dataTransfer.files); }}
+            >
+              <div className="big">{tab === "image" ? "📷" : "🧊"}</div>
+              <h3>{create.isPending ? "מעלה…" : "גרור לכאן או לחץ לבחירה"}</h3>
+              <p className="muted">
+                {tab === "image"
+                  ? "JPG / PNG / WEBP / HEIC · עד 20MB · מינימום 512×512"
+                  : "STL / OBJ / 3MF / PLY / GLB · עד 200MB"}
+              </p>
+              <input ref={inputRef} type="file" hidden accept={ACCEPT[tab]}
+                     onChange={(e) => onFiles(e.target.files)} />
+            </div>
+          )}
+          {create.isError && (
+            <div className="error-box">שגיאה: {(create.error as Error).message}</div>
+          )}
         </div>
-      ) : (
-        <div
-          className={`dropzone ${drag ? "drag" : ""}`}
-          onClick={() => inputRef.current?.click()}
-          onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
-          onDragLeave={() => setDrag(false)}
-          onDrop={(e) => { e.preventDefault(); setDrag(false); onFiles(e.dataTransfer.files); }}
-        >
-          <div className="big">{tab === "image" ? "📷" : "🧊"}</div>
-          <h3>{create.isPending ? "מעלה…" : "גרור לכאן או לחץ לבחירה"}</h3>
-          <p className="muted">
-            {tab === "image"
-              ? "JPG / PNG / WEBP / HEIC · עד 20MB · מינימום 512×512"
-              : "STL / OBJ / 3MF / PLY / GLB · עד 200MB"}
-          </p>
-          <input ref={inputRef} type="file" hidden accept={ACCEPT[tab]}
-                 onChange={(e) => onFiles(e.target.files)} />
+
+        <div className="card">
+          <h3 style={{ marginTop: 0 }}>💡 טיפים לצילום מוצלח</h3>
+          <ul className="muted" style={{ lineHeight: 1.9 }}>
+            <li>אור טבעי חזק ואחיד, בלי צללים קשים</li>
+            <li>רקע חלק בצבע מנוגד לחפץ</li>
+            <li>החפץ ממלא את רוב הפריים, במוקד חד</li>
+            <li>זווית של ~30° מעל קו האופק מציגה הכי הרבה גיאומטריה</li>
+          </ul>
         </div>
-      )}
-
-      {create.isError && (
-        <div className="error-box">שגיאה: {(create.error as Error).message}</div>
-      )}
-
-      <div className="card" style={{ marginTop: "1.5rem" }}>
-        <h3 style={{ marginTop: 0 }}>💡 טיפים לצילום מוצלח</h3>
-        <ul className="muted">
-          <li>אור טבעי חזק ואחיד, בלי צללים קשים</li>
-          <li>רקע חלק בצבע מנוגד לחפץ</li>
-          <li>החפץ ממלא את רוב הפריים, במוקד חד</li>
-          <li>זווית של ~30° מעל קו האופק מציגה הכי הרבה גיאומטריה</li>
-        </ul>
       </div>
 
       {recent.length > 0 && (

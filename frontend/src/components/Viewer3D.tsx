@@ -60,7 +60,7 @@ function ModelMesh({ geo, targetMm, axis, rotationDeg }: {
   return (
     <group position={offset.toArray()} scale={[scale, scale, scale]}>
       <mesh geometry={geo} rotation={[rx, ry, rz]}>
-        <meshStandardMaterial color="#2dd4bf" metalness={0.1} roughness={0.55} />
+        <meshStandardMaterial color="#818cf8" metalness={0.15} roughness={0.45} />
       </mesh>
     </group>
   );
@@ -89,18 +89,19 @@ export default function Viewer3D({ stlUrl, bed, targetHeightMm, scaleAxis = "z",
   return (
     <div className="viewer-canvas" style={{ position: "relative" }}>
       <Canvas camera={{ position: [bedX * 0.9, -bedY * 1.1, bedX * 0.8], fov: 45, up: [0, 0, 1], near: 1, far: 5000 }}>
-        <color attach="background" args={["#0d1117"]} />
+        <color attach="background" args={["#141827"]} />
+        <fog attach="fog" args={["#141827", 900, 2400]} />
         <ambientLight intensity={0.55} />
         <directionalLight position={[100, -120, 220]} intensity={1.15} />
-        <directionalLight position={[-150, 100, 80]} intensity={0.35} color="#88aaff" />
+        <directionalLight position={[-150, 100, 80]} intensity={0.4} color="#a5b4fc" />
         {/* משטח הדפסה וירטואלי */}
         <mesh position={[0, 0, -0.5]}>
           <boxGeometry args={[bedX, bedY, 1]} />
-          <meshStandardMaterial color="#161b22" />
+          <meshStandardMaterial color="#1b1f2e" />
         </mesh>
         <Grid
           position={[0, 0, 0.05]} args={[bedX, bedY]} rotation={[Math.PI / 2, 0, 0]}
-          cellSize={10} cellColor="#30363d" sectionSize={50} sectionColor="#2dd4bf44"
+          cellSize={10} cellColor="#2a3046" sectionSize={50} sectionColor="#818cf844"
           fadeDistance={1200} infiniteGrid={false}
         />
         <Suspense fallback={null}>
@@ -110,13 +111,14 @@ export default function Viewer3D({ stlUrl, bed, targetHeightMm, scaleAxis = "z",
       </Canvas>
       {dimsText && (
         <div className="mono" style={{
-          position: "absolute", bottom: 10, left: 12, background: "#161b22cc",
+          position: "absolute", bottom: 10, left: 12, background: "#1b1f2ecc",
           padding: "4px 10px", borderRadius: 8, fontSize: "0.85rem", direction: "rtl",
+          border: "1px solid rgba(148,163,184,0.14)",
         }}>
           📐 {dimsText}
         </div>
       )}
-      {!geo && <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", color: "#8b949e" }}>טוען מודל…</div>}
+      {!geo && <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", color: "#96a0b8" }}>טוען מודל…</div>}
     </div>
   );
 }

@@ -347,21 +347,24 @@ function ResultsView({ job }: { job: Job }) {
 
       {showSlice && <SliceView job={job} />}
 
-      <h2>Preview שכבות</h2>
-      <GcodePreview jobId={job.id}
-                    bed={profile ? { x: profile.bed_x, y: profile.bed_y } : undefined} />
-
-      {previews.length > 0 && (
-        <>
-          <h2>תצוגות מקדימות</h2>
-          <div className="stat-cards">
-            {previews.map((p) => (
-              <img key={p.id} src={api.artifactUrl(p.id)} alt={p.filename}
-                   style={{ width: "100%", borderRadius: 12, border: "1px solid var(--border)" }} />
-            ))}
+      <div className="split-eq">
+        <div>
+          <h2>Preview שכבות</h2>
+          <GcodePreview jobId={job.id}
+                        bed={profile ? { x: profile.bed_x, y: profile.bed_y } : undefined} />
+        </div>
+        {previews.length > 0 && (
+          <div>
+            <h2>תצוגות מקדימות</h2>
+            <div className="stat-cards" style={{ gridTemplateColumns: "repeat(2, 1fr)", margin: 0 }}>
+              {previews.map((p) => (
+                <img key={p.id} src={api.artifactUrl(p.id)} alt={p.filename}
+                     style={{ width: "100%", borderRadius: 12, border: "1px solid var(--border)" }} />
+              ))}
+            </div>
           </div>
-        </>
-      )}
+        )}
+      </div>
 
       {mesh && (
         <>
