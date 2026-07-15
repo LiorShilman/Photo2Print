@@ -1,0 +1,136 @@
+/* Photo2Print — עיצוב כהה RTL לפי PRD §6.1 */
+:root {
+  --bg: #0d1117;
+  --surface: #161b22;
+  --surface2: #21262d;
+  --border: #30363d;
+  --text: #e6edf3;
+  --muted: #8b949e;
+  --accent: #2dd4bf;
+  --accent-dim: #14b8a622;
+  --warn: #f59e0b;
+  --error: #ef4444;
+  --ok: #3fb950;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Heebo", "Segoe UI", sans-serif;
+  min-height: 100vh;
+}
+
+.mono { font-family: "JetBrains Mono", Consolas, monospace; direction: ltr; unicode-bidi: embed; }
+
+/* --- מעטפת --- */
+.app-header {
+  display: flex; align-items: center; gap: 1.5rem;
+  padding: 0.8rem 2rem; background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; z-index: 50;
+}
+.app-header .logo { font-size: 1.3rem; font-weight: 800; color: var(--accent); text-decoration: none; }
+.app-header nav { display: flex; gap: 1rem; }
+.app-header nav a { color: var(--muted); text-decoration: none; padding: 0.3rem 0.7rem; border-radius: 8px; }
+.app-header nav a.active, .app-header nav a:hover { color: var(--text); background: var(--surface2); }
+
+.page { max-width: 1200px; margin: 0 auto; padding: 1.5rem 2rem 4rem; }
+
+/* --- כפתורים ואינפוטים --- */
+button, .btn {
+  background: var(--accent); color: #06251f; border: none; border-radius: 10px;
+  padding: 0.6rem 1.4rem; font-size: 1rem; font-weight: 600; font-family: inherit;
+  cursor: pointer; transition: opacity .15s; text-decoration: none; display: inline-block;
+}
+button:hover, .btn:hover { opacity: 0.88; }
+button:disabled { background: var(--surface2); color: var(--muted); cursor: not-allowed; }
+button.secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+button.danger { background: transparent; color: var(--error); border: 1px solid var(--error); }
+
+input, select {
+  background: var(--bg); color: var(--text); border: 1px solid var(--border);
+  border-radius: 8px; padding: 0.5rem 0.8rem; font-size: 1rem; font-family: inherit;
+}
+input:focus, select:focus { outline: 2px solid var(--accent-dim); border-color: var(--accent); }
+label { color: var(--muted); font-size: 0.88rem; display: block; margin-bottom: 0.25rem; }
+
+.card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 14px; padding: 1.3rem;
+}
+
+/* --- מסך העלאה --- */
+.dropzone {
+  border: 2px dashed var(--border); border-radius: 16px;
+  padding: 4rem 2rem; text-align: center; cursor: pointer;
+  transition: border-color .2s, background .2s;
+}
+.dropzone.drag { border-color: var(--accent); background: var(--accent-dim); }
+.dropzone .big { font-size: 3rem; }
+.tabs { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
+.tabs button {
+  background: var(--surface2); color: var(--muted); border: 1px solid var(--border);
+}
+.tabs button.active { background: var(--accent-dim); color: var(--accent); border-color: var(--accent); }
+
+/* --- progress --- */
+.progress-track { background: var(--surface2); border-radius: 99px; height: 10px; overflow: hidden; }
+.progress-fill { background: var(--accent); height: 100%; transition: width .4s ease; border-radius: 99px; }
+.stage-list { list-style: none; padding: 0; margin: 1rem 0; }
+.stage-list li { display: flex; align-items: center; gap: 0.6rem; padding: 0.35rem 0; color: var(--muted); }
+.stage-list li.done { color: var(--ok); }
+.stage-list li.running { color: var(--accent); font-weight: 600; }
+.stage-list li.failed { color: var(--error); }
+
+/* --- שערי איכות --- */
+.gates-row { display: flex; gap: 0.5rem; flex-wrap: wrap; margin: 0.8rem 0; }
+.gate-chip {
+  padding: 0.25rem 0.7rem; border-radius: 99px; font-size: 0.82rem; font-weight: 600;
+  border: 1px solid; cursor: help;
+}
+.gate-chip.pass { color: var(--ok); border-color: var(--ok); background: #3fb95015; }
+.gate-chip.warn { color: var(--warn); border-color: var(--warn); background: #f59e0b15; }
+.gate-chip.fail { color: var(--error); border-color: var(--error); background: #ef444415; }
+.gate-chip.pending { color: var(--muted); border-color: var(--border); }
+
+/* --- viewer --- */
+.viewer-layout { display: grid; grid-template-columns: 1fr 320px; gap: 1.2rem; }
+@media (max-width: 900px) { .viewer-layout { grid-template-columns: 1fr; } }
+.viewer-canvas {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+  height: 520px; overflow: hidden; direction: ltr; /* אי LTR לתלת-ממד */
+}
+.side-panel { display: flex; flex-direction: column; gap: 1rem; }
+
+/* --- כרטיסי סיכום --- */
+.stat-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.8rem; margin: 1rem 0; }
+.stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 0.9rem; text-align: center; }
+.stat-card b { display: block; font-size: 1.4rem; color: var(--accent); margin-bottom: 0.2rem; }
+.stat-card span { color: var(--muted); font-size: 0.85rem; }
+
+/* --- טבלת היסטוריה --- */
+table.jobs { width: 100%; border-collapse: collapse; }
+table.jobs th, table.jobs td { padding: 0.7rem 0.9rem; text-align: right; border-bottom: 1px solid var(--surface2); }
+table.jobs th { color: var(--muted); font-weight: 400; font-size: 0.85rem; }
+table.jobs tr:hover td { background: var(--surface); }
+
+.badge { padding: 0.15rem 0.6rem; border-radius: 99px; font-size: 0.8rem; }
+.badge.done { background: #3fb95022; color: var(--ok); }
+.badge.failed { background: #ef444422; color: var(--error); }
+.badge.working { background: var(--accent-dim); color: var(--accent); }
+.badge.waiting { background: #f59e0b22; color: var(--warn); }
+
+.error-box {
+  background: #ef444412; border: 1px solid var(--error); border-radius: 12px;
+  padding: 1rem 1.3rem; margin: 1rem 0;
+}
+.error-box ul { margin: 0.5rem 0 0; padding-inline-start: 1.2rem; color: var(--muted); }
+
+.muted { color: var(--muted); }
+.row { display: flex; gap: 0.8rem; align-items: center; flex-wrap: wrap; }
+.grow { flex: 1; }
+h1 { font-weight: 800; }
+h2 { font-weight: 600; border-bottom: 1px solid var(--border); padding-bottom: 0.4rem; }

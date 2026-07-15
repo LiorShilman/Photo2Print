@@ -1,0 +1,190 @@
+"""שלב 8 — אריזה ופלט (PRD §5.8): ZIP + previews + דוח HTML עברי + metadata."""
+import json
+import zipfile
+from datetime import datetime, timezone
+from pathlib import Path
+
+import numpy as np
+
+from ...storage import artifact_path, latest_artifact, save_artifact
+from ..context import StageContext
+
+VIEWS = {"front": (0, 0), "side": (0, 90), "top": (89, 0)}
+
+
+def render_previews(mesh_path: Path, out_dir: Path, on_progress) -> list[Path]:
+    """רנדור סטטי headless עם matplotlib — עמיד יותר מ-GL בשרת ללא תצוגה."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    import trimesh
+    from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+
+    mesh = trimesh.load(str(mesh_path), force="mesh")
+    if len(mesh.faces) > 40_000:  # דגימה לרנדור מהיר
+        try:
+            mesh = mesh.simplify_quadric_decimation(face_count=30_000)
+        except Exception:
+            pass
+
+    tris = mesh.triangles
+    outputs = []
+    for i, (name, (elev, azim)) in enumerate(VIEWS.items()):
+        on_progress(20 + i * 15, f"מרנדר תצוגת {name}…")
+        fig = plt.figure(figsize=(6, 6), facecolor="#0d1117")
+        ax = fig.add_subplot(111, projection="3d", facecolor="#0d1117")
+        coll = Poly3DCollection(tris, alpha=1.0, facecolor="#2dd4bf",
+                                edgecolor="none", shade=True)
+        ax.add_collection3d(coll)
+        lo, hi = mesh.bounds
+        center, radius = (lo + hi) / 2, max(hi - lo) / 2 * 1.1
+        for axis_set, c in zip((ax.set_xlim, ax.set_ylim, ax.set_zlim), center):
+            axis_set(c - radius, c + radius)
+        ax.view_init(elev=elev, azim=azim)
+        ax.set_axis_off()
+        out = out_dir / f"views_{name}.png"
+        fig.savefig(out, dpi=100, bbox_inches="tight", facecolor="#0d1117")
+        plt.close(fig)
+        outputs.append(out)
+    return outputs
+
+
+def build_report_html(job, stages, stats: dict, gates: dict) -> str:
+    """דוח הדפסה עברי RTL כהה — self-contained."""
+    from jinja2 import Template
+    template = Template("""<!DOCTYPE html>
+<html dir="rtl" lang="he"><head><meta charset="utf-8">
+<title>דוח הדפסה — {{ job_id }}</title>
+<style>
+ body{background:#0d1117;color:#e6edf3;font-family:'Segoe UI',Arial,sans-serif;max-width:860px;margin:2rem auto;padding:0 1rem}
+ h1{color:#2dd4bf} h2{border-bottom:1px solid #30363d;padding-bottom:.3rem;margin-top:2rem}
+ table{width:100%;border-collapse:collapse;background:#161b22;border-radius:8px}
+ td,th{padding:.55rem .8rem;border-bottom:1px solid #21262d;text-align:right}
+ .pass{color:#3fb950}.warn{color:#f59e0b}.fail{color:#ef4444}
+ .cards{display:flex;gap:1rem;flex-wrap:wrap;margin:1rem 0}
+ .card{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:1rem 1.4rem;min-width:150px}
+ .card b{display:block;font-size:1.5rem;color:#2dd4bf}
+ .mono{font-family:'JetBrains Mono',Consolas,monospace;direction:ltr;display:inline-block}
+</style></head><body>
+<h1>🖨️ Photo2Print — דוח הדפסה</h1>
+<p>ג'וב <span class="mono">{{ job_id }}</span> · נוצר {{ created }} · מקור: {{ provider }}</p>
+
+<div class="cards">
+ <div class="card"><b>{{ time_str }}</b>זמן הדפסה משוער</div>
+ <div class="card"><b>{{ filament_g }} גרם</b>משקל חוט ({{ filament_m }} מ')</div>
+ <div class="card"><b>₪{{ cost }}</b>עלות משוערת</div>
+ <div class="card"><b>{{ layers }}</b>שכבות</div>
+</div>
+
+<h2>הגדרות הדפסה</h2>
+<table>
+ <tr><td>מדפסת</td><td>{{ printer }}</td></tr>
+ <tr><td>פריסט</td><td>{{ preset }}</td></tr>
+ <tr><td>חומר</td><td>{{ material }}</td></tr>
+</table>
+
+<h2>שערי איכות (Quality Gates)</h2>
+<table><tr><th>שער</th><th>סטטוס</th><th>פירוט</th></tr>
+{% for g, info in gates.items() %}
+ <tr><td class="mono">{{ g }}</td>
+     <td class="{{ info.status }}">{{ {'pass':'✔ עבר','warn':'⚠ אזהרה','fail':'✘ נכשל'}[info.status] }}</td>
+     <td>{{ info.message_he }}</td></tr>
+{% endfor %}
+</table>
+
+<h2>שלבי העיבוד</h2>
+<table><tr><th>#</th><th>שלב</th><th>סטטוס</th><th>משך</th></tr>
+{% for s in stages %}
+ <tr><td>{{ s.idx }}</td><td>{{ s.name }}</td><td class="{{ 'pass' if s.status=='done' else 'fail' }}">{{ s.status }}</td><td class="mono">{{ s.duration }}</td></tr>
+{% endfor %}
+</table>
+<p style="color:#8b949e;margin-top:2rem">נוצר אוטומטית על ידי Photo2Print · מדיניות אפס-ניחושים: אף קובץ לא נארז בלי מעבר של כל השערים.</p>
+</body></html>""")
+
+    t = stats.get("time_s", 0)
+    time_str = f"{t // 3600}:{(t % 3600) // 60:02d} שע'" if t >= 3600 else f"{t // 60} דק'"
+    stage_rows = []
+    for s in stages:
+        dur = "-"
+        if s.started_at and s.finished_at:
+            dur = f"{(s.finished_at - s.started_at).total_seconds():.1f}s"
+        stage_rows.append({"idx": s.stage_index, "name": s.stage_name, "status": s.status, "duration": dur})
+
+    return template.render(
+        job_id=job.id, created=job.created_at.strftime("%d/%m/%Y %H:%M"),
+        provider=job.source_provider or "-",
+        time_str=time_str,
+        filament_g=round(stats.get("filament_g", 0), 1),
+        filament_m=round(stats.get("filament_mm", 0) / 1000.0, 1),
+        cost=stats.get("cost", {}).get("total_ils", 0),
+        layers=stats.get("layers", 0),
+        printer=stats.get("profile", "-"), preset=stats.get("preset", "-"),
+        material=stats.get("material", "-"),
+        gates=gates, stages=stage_rows,
+    )
+
+
+def run(ctx: StageContext) -> dict:
+    from ...db import db_session
+    from ...models import Job, JobStage
+
+    with db_session() as s:
+        job = s.get(Job, ctx.job_id)
+        stages = (s.query(JobStage).filter_by(job_id=ctx.job_id)
+                  .order_by(JobStage.stage_index).all())
+        stats = dict(job.print_stats_json or {})
+        gates = dict(job.gates_json or {})
+
+    # אכיפת A-2: אסור לארוז עם gate אדום
+    red = [g for g, info in gates.items() if info.get("status") == "fail"]
+    if red:
+        from ..context import GateFailure
+        raise GateFailure(red[0], "לא ניתן לארוז — קיימים שערים אדומים: " + ", ".join(red))
+
+    mesh_final = latest_artifact(ctx.job_id, "mesh_final") or latest_artifact(ctx.job_id, "mesh_repaired")
+
+    ctx.progress(10, "מרנדר תצוגות מקדימות…")
+    previews = render_previews(artifact_path(mesh_final), ctx.work_dir, ctx.progress)
+    for p in previews:
+        save_artifact(ctx.job_id, "preview", p)
+
+    ctx.progress(65, "מפיק דוח הדפסה…")
+    report_html = build_report_html(job, stages, stats, gates)
+    report_path = ctx.work_dir / "print_report.html"
+    report_path.write_text(report_html, encoding="utf-8")
+    save_artifact(ctx.job_id, "report", report_path)
+
+    metadata = {
+        "job_id": job.id, "generated_at": datetime.now(timezone.utc).isoformat(),
+        "input_type": job.input_type, "provider": job.source_provider,
+        "image_score": job.image_score, "ai_confidence": job.ai_confidence,
+        "gates": gates, "print_stats": stats,
+        "stages": [{"name": st.stage_name, "index": st.stage_index, "status": st.status,
+                    "metrics": st.metrics_json} for st in stages],
+    }
+    meta_path = ctx.work_dir / "pipeline_metadata.json"
+    meta_path.write_text(json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8")
+    save_artifact(ctx.job_id, "report_json", meta_path)
+
+    ctx.progress(80, "אורז ZIP…")
+    zip_path = ctx.work_dir / f"photo2print_job_{job.id}.zip"
+    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as z:
+        def _add(kind: str, arcname: str):
+            art = latest_artifact(ctx.job_id, kind)
+            if art:
+                z.write(artifact_path(art), arcname)
+
+        _add("mesh_final", "model/model_repaired.stl")
+        _add("mesh_raw", "model/model_original_raw" + Path(latest_artifact(ctx.job_id, 'mesh_raw').filename).suffix)
+        gcode = latest_artifact(ctx.job_id, "gcode")
+        if gcode:
+            z.write(artifact_path(gcode), f"print/{gcode.filename}")
+        _add("slicer_ini", "print/slicer_config_used.ini")
+        for p in previews:
+            z.write(p, f"previews/{p.name}")
+        z.write(report_path, "report/print_report.html")
+        z.write(meta_path, "report/pipeline_metadata.json")
+
+    save_artifact(ctx.job_id, "zip", zip_path)
+    ctx.progress(100, "חבילת ההדפסה מוכנה")
+    return {"zip_size_mb": round(zip_path.stat().st_size / (1024 * 1024), 2)}
