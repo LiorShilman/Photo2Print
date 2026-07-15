@@ -35,10 +35,8 @@ def render_previews(mesh_path: Path, out_dir: Path, on_progress) -> list[Path]:
     base = np.array([0x2d, 0xd4, 0xbf]) / 255.0
     face_colors = np.clip(intensity[:, None] * base[None, :], 0, 1)
 
-    outputs = []
-    for i, (name, (elev, azim)) in enumerate(VIEWS.items()):
-        on_progress(20 + i * 15, f"מרנדר תצוגת {name}…")
-        fig = plt.figure(figsize=(6, 6), facecolor="#0d1117")
+    def _render(elev: float, azim: float, out: Path, size: float = 6, dpi: int = 100):
+        fig = plt.figure(figsize=(size, size), facecolor="#0d1117")
         ax = fig.add_subplot(111, projection="3d", facecolor="#0d1117")
         coll = Poly3DCollection(tris, alpha=1.0)
         coll.set_facecolor(face_colors)
@@ -49,10 +47,30 @@ def render_previews(mesh_path: Path, out_dir: Path, on_progress) -> list[Path]:
             axis_set(c - radius, c + radius)
         ax.view_init(elev=elev, azim=azim)
         ax.set_axis_off()
-        out = out_dir / f"views_{name}.png"
-        fig.savefig(out, dpi=100, bbox_inches="tight", facecolor="#0d1117")
+        fig.savefig(out, dpi=dpi, bbox_inches="tight", facecolor="#0d1117")
         plt.close(fig)
+
+    outputs = []
+    for i, (name, (elev, azim)) in enumerate(VIEWS.items()):
+        on_progress(15 + i * 8, f"מרנדר תצוגת {name}…")
+        out = out_dir / f"views_{name}.png"
+        _render(elev, azim, out)
         outputs.append(out)
+
+    # turntable GIF — סיבוב 360° (PRD §5.8)
+    on_progress(42, "מרנדר סיבוב 360°…")
+    from PIL import Image as PILImage
+    frames = []
+    for k in range(18):
+        frame_path = out_dir / f"_tt_{k}.png"
+        _render(18, k * 20, frame_path, size=4, dpi=70)
+        frames.append(PILImage.open(frame_path).convert("P", palette=PILImage.ADAPTIVE))
+    gif_path = out_dir / "model_turntable.gif"
+    frames[0].save(gif_path, save_all=True, append_images=frames[1:],
+                   duration=120, loop=0)
+    for k in range(18):
+        (out_dir / f"_tt_{k}.png").unlink(missing_ok=True)
+    outputs.append(gif_path)
     return outputs
 
 
@@ -152,6 +170,23 @@ def run(ctx: StageContext) -> dict:
 
     ctx.progress(10, "מרנדר תצוגות מקדימות…")
     previews = render_previews(artifact_path(mesh_final), ctx.work_dir, ctx.progress)
+
+    # שכבה ראשונה מה-G-code — קריטי לאבחון הצמדות (PRD §5.8)
+    gcode_art = latest_artifact(ctx.job_id, "gcode")
+    if gcode_art:
+        ctx.progress(55, "מרנדר את השכבה הראשונה…")
+        from ...models import PrinterProfile
+        from ..gcode_preview import render_first_layer_png
+        with db_session() as s:
+            prof = s.get(PrinterProfile, job.profile_id) if job.profile_id else None
+        bed = (prof.bed_x, prof.bed_y) if prof else (220.0, 220.0)
+        fl_path = ctx.work_dir / "first_layer.png"
+        try:
+            if render_first_layer_png(artifact_path(gcode_art), fl_path, bed):
+                previews.append(fl_path)
+        except Exception:
+            pass  # preview אופציונלי — לא מכשיל אריזה
+
     for p in previews:
         save_artifact(ctx.job_id, "preview", p)
 

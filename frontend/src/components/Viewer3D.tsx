@@ -11,6 +11,7 @@ interface Props {
   bed?: { x: number; y: number; z: number };
   targetHeightMm?: number;      // סקייל חי לפי קלט המשתמש
   scaleAxis?: "x" | "y" | "z";
+  rotationDeg?: [number, number, number];  // סיבוב ידני (F-5.5)
 }
 
 function useStl(url: string) {
@@ -28,9 +29,21 @@ function useStl(url: string) {
   return geo;
 }
 
-function ModelMesh({ geo, targetMm, axis }: { geo: THREE.BufferGeometry; targetMm?: number; axis: "x" | "y" | "z" }) {
-  const { scale, dims, offset } = useMemo(() => {
-    const bb = geo.boundingBox!;
+function ModelMesh({ geo, targetMm, axis, rotationDeg }: {
+  geo: THREE.BufferGeometry; targetMm?: number; axis: "x" | "y" | "z";
+  rotationDeg?: [number, number, number];
+}) {
+  const { scale, offset } = useMemo(() => {
+    // הסיבוב מוחל על הגיאומטריה לפני חישוב הסקייל וההנחה על המשטח,
+    // כדי שהתצוגה תתאים למה שהשרת יבצע (סיבוב → סקייל → הנחה)
+    const rotated = geo.clone();
+    const [rx, ry, rz] = (rotationDeg ?? [0, 0, 0]).map((d) => (d * Math.PI) / 180);
+    if (rx || ry || rz) {
+      const m = new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(rx, ry, rz, "XYZ"));
+      rotated.applyMatrix4(m);
+    }
+    rotated.computeBoundingBox();
+    const bb = rotated.boundingBox!;
     const size = new THREE.Vector3();
     bb.getSize(size);
     const axisSize = { x: size.x, y: size.y, z: size.z }[axis] || 1;
@@ -39,41 +52,39 @@ function ModelMesh({ geo, targetMm, axis }: { geo: THREE.BufferGeometry; targetM
     bb.getCenter(center);
     return {
       scale: s,
-      dims: { x: size.x * s, y: size.y * s, z: size.z * s },
       offset: new THREE.Vector3(-center.x * s, -center.y * s, -bb.min.z * s),
     };
-  }, [geo, targetMm, axis]);
+  }, [geo, targetMm, axis, rotationDeg]);
 
+  const [rx, ry, rz] = (rotationDeg ?? [0, 0, 0]).map((d) => (d * Math.PI) / 180);
   return (
-    <group>
-      {/* המרה: Z-up (עולם הדפסה) בתוך סצנת three (Y-up) נעשית בהיפוך המצלמה */}
-      <mesh geometry={geo} scale={[scale, scale, scale]} position={offset.toArray()}>
+    <group position={offset.toArray()} scale={[scale, scale, scale]}>
+      <mesh geometry={geo} rotation={[rx, ry, rz]}>
         <meshStandardMaterial color="#2dd4bf" metalness={0.1} roughness={0.55} />
       </mesh>
-      <DimsLabel dims={dims} />
     </group>
   );
 }
 
-function DimsLabel({ dims }: { dims: { x: number; y: number; z: number } }) {
-  return (
-    <group position={[0, 0, dims.z + 12]} />
-  );
-}
-
-export default function Viewer3D({ stlUrl, bed, targetHeightMm, scaleAxis = "z" }: Props) {
+export default function Viewer3D({ stlUrl, bed, targetHeightMm, scaleAxis = "z", rotationDeg }: Props) {
   const geo = useStl(stlUrl);
   const bedX = bed?.x ?? 220;
   const bedY = bed?.y ?? 220;
 
   const dimsText = useMemo(() => {
     if (!geo?.boundingBox) return "";
+    const rotated = geo.clone();
+    const [rx, ry, rz] = (rotationDeg ?? [0, 0, 0]).map((d) => (d * Math.PI) / 180);
+    if (rx || ry || rz) {
+      rotated.applyMatrix4(new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(rx, ry, rz, "XYZ")));
+      rotated.computeBoundingBox();
+    }
     const size = new THREE.Vector3();
-    geo.boundingBox.getSize(size);
+    rotated.boundingBox!.getSize(size);
     const axisSize = { x: size.x, y: size.y, z: size.z }[scaleAxis] || 1;
     const s = targetHeightMm ? targetHeightMm / axisSize : 1;
     return `${(size.x * s).toFixed(1)} × ${(size.y * s).toFixed(1)} × ${(size.z * s).toFixed(1)} מ"מ`;
-  }, [geo, targetHeightMm, scaleAxis]);
+  }, [geo, targetHeightMm, scaleAxis, rotationDeg]);
 
   return (
     <div className="viewer-canvas" style={{ position: "relative" }}>
@@ -93,7 +104,7 @@ export default function Viewer3D({ stlUrl, bed, targetHeightMm, scaleAxis = "z" 
           fadeDistance={1200} infiniteGrid={false}
         />
         <Suspense fallback={null}>
-          {geo && <ModelMesh geo={geo} targetMm={targetHeightMm} axis={scaleAxis} />}
+          {geo && <ModelMesh geo={geo} targetMm={targetHeightMm} axis={scaleAxis} rotationDeg={rotationDeg} />}
         </Suspense>
         <OrbitControls makeDefault target={[0, 0, 30]} />
       </Canvas>

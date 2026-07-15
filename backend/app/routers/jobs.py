@@ -120,6 +120,19 @@ def duplicate_job(job_id: str, db: Session = Depends(get_db)):
     return new
 
 
+@router.get("/{job_id}/gcode_layers")
+def gcode_layers(job_id: str, db: Session = Depends(get_db)):
+    """שכבות ה-G-code ל-preview אינטראקטיבי (F-7.7)."""
+    from ..pipeline.gcode_preview import parse_layers
+
+    art = (db.query(Artifact).filter_by(job_id=job_id, kind="gcode")
+           .order_by(Artifact.created_at.desc()).first())
+    if art is None:
+        raise HTTPException(404, "אין עדיין G-code לג'וב זה")
+    layers = parse_layers(artifact_path(art))
+    return {"layers": layers, "count": len(layers)}
+
+
 @router.get("/{job_id}/download")
 def download_zip(job_id: str, db: Session = Depends(get_db)):
     art = (db.query(Artifact).filter_by(job_id=job_id, kind="zip")

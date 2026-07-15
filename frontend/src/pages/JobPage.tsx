@@ -6,6 +6,7 @@ import { api, latestArtifact, type Job } from "../api";
 import { useJobProgress } from "../hooks/useJobProgress";
 import Viewer3D from "../components/Viewer3D";
 import GatesRow from "../components/GatesRow";
+import GcodePreview from "../components/GcodePreview";
 
 const STAGE_HE: [string, string][] = [
   ["ingest", "קליטה ואימות"],
@@ -22,7 +23,6 @@ const WORKING = ["pending", "running", "orienting", "slicing"];
 
 export default function JobPage() {
   const { id } = useParams<{ id: string }>();
-  const qc = useQueryClient();
   const progress = useJobProgress(id);
 
   const { data: job } = useQuery({
@@ -90,7 +90,6 @@ function ProgressView({ job, progressPct, message }: { job: Job; progressPct: nu
 function FailedView({ job }: { job: Job }) {
   const failedStage = job.stages.find((s) => s.status === "failed");
   const suggestions = (failedStage?.error_json?.suggestions_he as string[] | undefined) ?? [];
-  const qc = useQueryClient();
   const dup = useMutation({ mutationFn: () => api.duplicate(job.id) });
 
   return (
@@ -108,11 +107,27 @@ function FailedView({ job }: { job: Job }) {
 }
 
 // --- S-4: סקייל וכיוון ---
+function RotationControl({ label, value, onChange }: {
+  label: string; value: number; onChange: (v: number) => void;
+}) {
+  // snap ל-15° (F-5.5)
+  const step = (d: number) => onChange(((value + d) % 360 + 360) % 360);
+  return (
+    <div className="row" style={{ gap: "0.4rem", alignItems: "center" }}>
+      <span className="mono" style={{ width: 18 }}>{label}</span>
+      <button className="secondary" style={{ padding: "0.15rem 0.55rem" }} onClick={() => step(-15)}>−15°</button>
+      <span className="mono" style={{ width: 42, textAlign: "center" }}>{value}°</span>
+      <button className="secondary" style={{ padding: "0.15rem 0.55rem" }} onClick={() => step(15)}>+15°</button>
+    </div>
+  );
+}
+
 function ScaleView({ job }: { job: Job }) {
   const [axis, setAxis] = useState<"x" | "y" | "z">("z");
   const [sizeMm, setSizeMm] = useState(80);
   const [autoOrient, setAutoOrient] = useState(true);
   const [flatten, setFlatten] = useState(false);
+  const [rot, setRot] = useState<[number, number, number]>([0, 0, 0]);
   const qc = useQueryClient();
   const { data: profiles } = useQuery({ queryKey: ["profiles"], queryFn: api.listProfiles });
   const [profileId, setProfileId] = useState<string>("");
@@ -123,7 +138,7 @@ function ScaleView({ job }: { job: Job }) {
   const scale = useMutation({
     mutationFn: () => api.scale(job.id, {
       axis, size_mm: sizeMm, auto_orient: autoOrient, flatten_base: flatten,
-      rotation_deg: [0, 0, 0],
+      rotation_deg: rot,
     }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["job", job.id] }),
   });
@@ -132,6 +147,7 @@ function ScaleView({ job }: { job: Job }) {
     <div className="viewer-layout">
       {mesh && (
         <Viewer3D stlUrl={api.artifactUrl(mesh.id)} targetHeightMm={sizeMm} scaleAxis={axis}
+                  rotationDeg={rot}
                   bed={profile ? { x: profile.bed_x, y: profile.bed_y, z: profile.bed_z } : undefined} />
       )}
       <div className="side-panel">
@@ -153,6 +169,12 @@ function ScaleView({ job }: { job: Job }) {
             <option value="">— ללא —</option>
             {profiles?.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
+          <label style={{ marginTop: "0.7rem" }}>סיבוב ידני (snap 15°)</label>
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.3rem" }}>
+            <RotationControl label="X" value={rot[0]} onChange={(v) => setRot([v, rot[1], rot[2]])} />
+            <RotationControl label="Y" value={rot[1]} onChange={(v) => setRot([rot[0], v, rot[2]])} />
+            <RotationControl label="Z" value={rot[2]} onChange={(v) => setRot([rot[0], rot[1], v])} />
+          </div>
           <div style={{ marginTop: "0.8rem" }}>
             <label><input type="checkbox" checked={autoOrient} onChange={(e) => setAutoOrient(e.target.checked)} /> אוריינטציה אוטומטית (ממזער supports)</label>
             <label><input type="checkbox" checked={flatten} onChange={(e) => setFlatten(e.target.checked)} /> השטחת בסיס עדינה</label>
@@ -260,13 +282,8 @@ function ResultsView({ job }: { job: Job }) {
   const report = latestArtifact(job, "report");
   const gcode = latestArtifact(job, "gcode");
   const mesh = latestArtifact(job, "mesh_final");
-  const qc = useQueryClient();
-  const reslice = useMutation({
-    mutationFn: () => api.getJob(job.id),
-    onSuccess: async () => {
-      await fetch(`/api/v1/jobs/${job.id}`); // no-op — הכפתור מוביל ל-SliceView דרך שינוי סטטוס בשרת
-    },
-  });
+  const { data: profiles } = useQuery({ queryKey: ["profiles"], queryFn: api.listProfiles });
+  const profile = profiles?.find((p) => p.id === job.profile_id);
   const [showSlice, setShowSlice] = useState(false);
 
   const t = stats?.time_s ?? 0;
@@ -290,6 +307,10 @@ function ResultsView({ job }: { job: Job }) {
       </div>
 
       {showSlice && <SliceView job={job} />}
+
+      <h2>Preview שכבות</h2>
+      <GcodePreview jobId={job.id}
+                    bed={profile ? { x: profile.bed_x, y: profile.bed_y } : undefined} />
 
       {previews.length > 0 && (
         <>
