@@ -8,7 +8,7 @@ export default function App() {
   return (
     <>
       <header className="app-header">
-        <NavLink to="/" className="logo">🖨️ Photo2Print</NavLink>
+        <NavLink to="/" className="logo">Photo2Print</NavLink>
         <nav>
           <NavLink to="/" end>העלאה</NavLink>
           <NavLink to="/history">היסטוריה</NavLink>

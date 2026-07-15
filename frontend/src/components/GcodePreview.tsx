@@ -148,7 +148,7 @@ export default function GcodePreview({ jobId, bed, colorChanges = [], onApplyCol
               <button className="secondary" style={{ padding: "0.35rem 0.9rem" }}
                       onClick={() => setPending([...pending.filter((c) => c.layer !== layerIdx + 1),
                                                  { layer: layerIdx + 1, color: pickColor }])}>
-                🎨 החלף צבע משכבה {layerIdx + 1}
+                החלף צבע משכבה {layerIdx + 1}
               </button>
               {pending.length > 0 && (
                 <button className="secondary" style={{ padding: "0.35rem 0.9rem" }}
@@ -169,7 +169,7 @@ export default function GcodePreview({ jobId, bed, colorChanges = [], onApplyCol
             {dirty && (
               <button style={{ marginTop: "0.7rem", width: "100%" }}
                       onClick={() => onApplyColorChanges(pending)}>
-                ▶ החל החלפות צבע (Slicing מחדש עם M600)
+                החל החלפות צבע (Slicing מחדש עם M600)
               </button>
             )}
             <p className="muted" style={{ fontSize: "0.78rem", marginTop: "0.5rem", marginBottom: 0 }}>

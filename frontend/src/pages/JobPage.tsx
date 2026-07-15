@@ -2,7 +2,7 @@
 import { useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, latestArtifact, type Job } from "../api";
+import { api, getDefaultProfileId, latestArtifact, type Job } from "../api";
 import { useJobProgress } from "../hooks/useJobProgress";
 import Viewer3D from "../components/Viewer3D";
 import GatesRow from "../components/GatesRow";
@@ -40,9 +40,14 @@ export default function JobPage() {
 
   return (
     <>
-      <div className="row">
-        <h1 className="grow">ג'וב <span className="mono">{job.id}</span></h1>
+      <div className="row" style={{ alignItems: "baseline", marginBottom: "0.2rem" }}>
+        <h1 style={{ fontSize: "1.45rem", margin: 0 }}>
+          {{ done: "תוצאות הדפסה", failed: "העיבוד נעצר", awaiting_scale: "קביעת מידות",
+             awaiting_slice: "הגדרות הדפסה" }[job.status] ?? "מעבד את המודל"}
+        </h1>
         <StatusBadge status={job.status} />
+        <span className="grow" />
+        <span className="mono muted" style={{ fontSize: "0.8rem" }}>{job.id}</span>
       </div>
       <GatesRow gates={job.gates_json} />
 
@@ -112,10 +117,10 @@ function FailedView({ job }: { job: Job }) {
       <div className="row" style={{ marginTop: "0.8rem" }}>
         {isBedOverflow && (
           <button onClick={() => split.mutate()} disabled={split.isPending}>
-            {split.isPending ? "חותך…" : "🪚 חתוך לחלקים אוטומטית"}
+            {split.isPending ? "חותך…" : "חתוך לחלקים אוטומטית"}
           </button>
         )}
-        <button className="secondary" onClick={() => dup.mutate()}>🔁 נסה שוב (ג'וב חדש)</button>
+        <button className="secondary" onClick={() => dup.mutate()}>נסה שוב (ג'וב חדש)</button>
         {dup.data && <a className="btn" href={`/jobs/${dup.data.id}`}>לג'וב החדש</a>}
       </div>
       {split.isError && <p style={{ color: "var(--error)" }}>{(split.error as Error).message}</p>}
@@ -147,7 +152,7 @@ function ScaleView({ job }: { job: Job }) {
   const [rot, setRot] = useState<[number, number, number]>([0, 0, 0]);
   const qc = useQueryClient();
   const { data: profiles } = useQuery({ queryKey: ["profiles"], queryFn: api.listProfiles });
-  const [profileId, setProfileId] = useState<string>("");
+  const [profileId, setProfileId] = useState<string>(job.profile_id || getDefaultProfileId());
 
   const mesh = latestArtifact(job, "mesh_repaired");
   const profile = profiles?.find((p) => p.id === (profileId || job.profile_id));
@@ -170,7 +175,7 @@ function ScaleView({ job }: { job: Job }) {
       )}
       <div className="side-panel">
         <div className="card">
-          <h3 style={{ marginTop: 0 }}>📐 קביעת מידות</h3>
+          <h3 style={{ marginTop: 0 }}>קביעת מידות</h3>
           <label>ציר מוביל</label>
           <Select value={axis} onChange={(v) => setAxis(v as "x" | "y" | "z")}
                   options={[
@@ -225,7 +230,7 @@ function ScaleView({ job }: { job: Job }) {
 function SliceView({ job }: { job: Job }) {
   const qc = useQueryClient();
   const { data: profiles } = useQuery({ queryKey: ["profiles"], queryFn: api.listProfiles });
-  const [profileId, setProfileId] = useState(job.profile_id ?? "");
+  const [profileId, setProfileId] = useState(job.profile_id || getDefaultProfileId());
   const [preset, setPreset] = useState<"draft" | "standard" | "quality">("standard");
   const [material, setMaterial] = useState<"PLA" | "PETG" | "TPU">("PLA");
   const [advanced, setAdvanced] = useState(false);
@@ -250,7 +255,7 @@ function SliceView({ job }: { job: Job }) {
       )}
       <div className="side-panel">
         <div className="card">
-          <h3 style={{ marginTop: 0 }}>🔪 הגדרות Slicing</h3>
+          <h3 style={{ marginTop: 0 }}>הגדרות Slicing</h3>
           <label>מדפסת</label>
           <Select value={profileId} onChange={setProfileId} placeholder="בחר מדפסת…"
                   options={(profiles ?? []).map((p) => ({
@@ -296,7 +301,7 @@ function SliceView({ job }: { job: Job }) {
           <button style={{ width: "100%", marginTop: "1rem" }}
                   disabled={!profileId || slice.isPending}
                   onClick={() => slice.mutate()}>
-            {slice.isPending ? "פורס…" : "▶ הרץ Slicing"}
+            {slice.isPending ? "פורס…" : "הרץ Slicing"}
           </button>
           {slice.isError && <p style={{ color: "var(--error)" }}>{(slice.error as Error).message}</p>}
         </div>
@@ -353,16 +358,17 @@ function ResultsView({ job }: { job: Job }) {
 
   return (
     <>
-      <div className="stat-cards">
-        <div className="stat-card"><b>{timeStr}</b><span>⏱ זמן הדפסה</span></div>
-        <div className="stat-card"><b>{stats?.filament_g?.toFixed(0) ?? "?"} גרם</b><span>🧵 חוט</span></div>
-        <div className="stat-card"><b>₪{stats?.cost?.total_ils ?? "?"}</b><span>💰 עלות משוערת</span></div>
-        <div className="stat-card"><b>{stats?.layers ?? "?"}</b><span>🥞 שכבות</span></div>
+      <div className="stat-strip">
+        <div><b>{timeStr}</b><span>זמן הדפסה</span></div>
+        <div><b>{stats?.filament_g?.toFixed(0) ?? "?"} גרם</b><span>חוט</span></div>
+        <div><b>₪{stats?.cost?.total_ils ?? "?"}</b><span>עלות משוערת</span></div>
+        <div><b>{stats?.layers ?? "?"}</b><span>שכבות</span></div>
+        <div><b>{stats?.profile ?? "?"}</b><span>מדפסת</span></div>
       </div>
 
       {stats?.parts && stats.parts.length > 1 && (
-        <div className="card" style={{ margin: "1rem 0", borderColor: "var(--warn)" }}>
-          <b>🪚 המודל חולק ל-{stats.parts.length} חלקים</b> — כל חלק מודפס בנפרד ומודבק בסיום.
+        <div className="card" style={{ margin: "1rem 0" }}>
+          <b>המודל חולק ל-{stats.parts.length} חלקים</b> — כל חלק מודפס בנפרד ומודבק בסיום.
           <table className="jobs" style={{ marginTop: "0.5rem" }}>
             <thead><tr><th>קובץ</th><th>זמן</th><th>חוט</th><th>שכבות</th><th></th></tr></thead>
             <tbody>
@@ -374,7 +380,7 @@ function ResultsView({ job }: { job: Job }) {
                     <td>{Math.round(p.time_s / 60)} דק'</td>
                     <td>{p.filament_g} גרם</td>
                     <td>{p.layers}</td>
-                    <td>{art && <a className="btn" style={{ padding: "0.2rem 0.7rem", fontSize: "0.85rem" }} href={api.artifactUrl(art.id)}>⬇</a>}</td>
+                    <td>{art && <a className="btn secondary" style={{ padding: "0.2rem 0.7rem", fontSize: "0.82rem" }} href={api.artifactUrl(art.id)}>הורדה</a>}</td>
                   </tr>
                 );
               })}
@@ -384,18 +390,18 @@ function ResultsView({ job }: { job: Job }) {
       )}
 
       <div className="row" style={{ margin: "1rem 0" }}>
-        <a className="btn" href={api.downloadUrl(job.id)}>⬇️ הורד חבילה מלאה (ZIP)</a>
-        {gcode && !stats?.parts && <a className="btn secondary" style={{ background: "var(--surface2)", color: "var(--text)" }} href={api.artifactUrl(gcode.id)}>G-code בלבד</a>}
-        {mesh && <a className="btn secondary" style={{ background: "var(--surface2)", color: "var(--text)" }} href={api.artifactUrl(mesh.id)}>STL בלבד</a>}
-        {report && <a className="btn secondary" style={{ background: "var(--surface2)", color: "var(--text)" }} href={api.artifactUrl(report.id)} target="_blank">📄 דוח מלא</a>}
-        <button className="secondary" onClick={() => setShowSlice(true)}>🔁 שכפל עם פרופיל אחר</button>
+        <a className="btn" href={api.downloadUrl(job.id)}>הורדת חבילה מלאה (ZIP)</a>
+        {gcode && !stats?.parts && <a className="btn secondary" href={api.artifactUrl(gcode.id)}>G-code</a>}
+        {mesh && <a className="btn secondary" href={api.artifactUrl(mesh.id)}>STL</a>}
+        {report && <a className="btn secondary" href={api.artifactUrl(report.id)} target="_blank">דוח מלא</a>}
+        <button className="secondary" onClick={() => setShowSlice(true)}>Slicing עם פרופיל אחר</button>
       </div>
 
       {showSlice && <SliceView job={job} />}
 
       <div className="split-eq">
         <div>
-          <h2>Preview שכבות {stats?.color_changes?.length ? "· רב-צבעי 🎨" : ""}</h2>
+          <h2>Preview שכבות{stats?.color_changes?.length ? " · רב-צבעי" : ""}</h2>
           <GcodePreview jobId={job.id}
                         bed={profile ? { x: profile.bed_x, y: profile.bed_y } : undefined}
                         colorChanges={stats?.color_changes ?? []}
@@ -403,12 +409,12 @@ function ResultsView({ job }: { job: Job }) {
         </div>
         {previews.length > 0 && (
           <div>
-            <h2>תצוגות מקדימות <span className="muted" style={{ fontSize: "0.8rem", fontWeight: 400 }}>· לחץ להגדלה</span></h2>
-            <div className="stat-cards" style={{ gridTemplateColumns: "repeat(2, 1fr)", margin: 0 }}>
+            <h2>תצוגות מקדימות <span className="muted" style={{ fontSize: "0.8rem", fontWeight: 400 }}>· לחיצה מגדילה</span></h2>
+            <div className="thumbs">
               {previews.map((p) => (
                 <img key={p.id} src={api.artifactUrl(p.id)} alt={p.filename}
-                     onClick={() => setLightbox(api.artifactUrl(p.id))}
-                     style={{ width: "100%", borderRadius: 12, border: "1px solid var(--border)", cursor: "zoom-in" }} />
+                     loading="lazy"
+                     onClick={() => setLightbox(api.artifactUrl(p.id))} />
               ))}
             </div>
           </div>
@@ -418,7 +424,7 @@ function ResultsView({ job }: { job: Job }) {
 
       {mesh && (
         <>
-          <h2>המודל הסופי {stats?.color_changes?.length ? "· צבוע לפי החלפות 🎨" : ""}</h2>
+          <h2>המודל הסופי{stats?.color_changes?.length ? " · צבוע לפי ההחלפות" : ""}</h2>
           <Viewer3D stlUrl={api.artifactUrl(mesh.id)} colorZones={colorZones} />
         </>
       )}

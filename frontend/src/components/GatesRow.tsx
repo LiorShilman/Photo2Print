@@ -17,11 +17,10 @@ export default function GatesRow({ gates }: { gates: Record<string, Gate> }) {
       {all.map((g) => {
         const info = gates[g];
         const status = info?.status ?? "pending";
-        const icon = { pass: "✔", warn: "⚠", fail: "✘", pending: "•" }[status] ?? "•";
         return (
           <span key={g} className={`gate-chip ${status}`}
                 title={info?.message_he || "טרם נבדק"}>
-            {icon} {g} · {GATE_LABELS[g]}
+            {GATE_LABELS[g]}
           </span>
         );
       })}

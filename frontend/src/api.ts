@@ -147,6 +147,18 @@ export function latestArtifact(job: Job, kind: string): Artifact | undefined {
   return [...job.artifacts].reverse().find((a) => a.kind === kind);
 }
 
+// מדפסת ברירת מחדל — נשמרת מקומית ומוזרקת לכל ג'וב חדש
+const DEFAULT_PROFILE_KEY = "p2p_default_profile";
+
+export function getDefaultProfileId(): string {
+  return localStorage.getItem(DEFAULT_PROFILE_KEY) ?? "";
+}
+
+export function setDefaultProfileId(id: string) {
+  if (id) localStorage.setItem(DEFAULT_PROFILE_KEY, id);
+  else localStorage.removeItem(DEFAULT_PROFILE_KEY);
+}
+
 export function thumbnailArtifact(job: Job): Artifact | undefined {
   // תמונה ממוזערת עקבית: hero איזומטרי > front > כל preview סטטי אחר (לא GIF)
   const previews = job.artifacts.filter((a) => a.kind === "preview");

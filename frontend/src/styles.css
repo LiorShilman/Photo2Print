@@ -16,10 +16,10 @@
   --warn: #fbbf24;
   --error: #fb7185;
   --ok: #34d399;
-  --radius: 16px;
+  --radius: 14px;
   --radius-sm: 10px;
-  --shadow: 0 10px 30px -12px rgba(0, 0, 0, 0.55);
-  --glow: 0 4px 24px -6px rgba(129, 140, 248, 0.45);
+  --shadow: 0 4px 16px -8px rgba(0, 0, 0, 0.4);
+  --glow: 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
 * { box-sizing: border-box; }
@@ -96,18 +96,18 @@ h3 { font-weight: 600; letter-spacing: -0.01em; }
 
 /* --- כפתורים --- */
 button, .btn {
-  background: var(--accent-grad);
-  color: #fff; border: none; border-radius: 12px;
-  padding: 0.6rem 1.5rem; font-size: 0.97rem; font-weight: 600; font-family: inherit;
+  background: #5b66e8;
+  color: #fff; border: none; border-radius: 10px;
+  padding: 0.55rem 1.3rem; font-size: 0.93rem; font-weight: 500; font-family: inherit;
   cursor: pointer; text-decoration: none; display: inline-block;
-  transition: transform .15s, box-shadow .2s, opacity .15s;
-  box-shadow: var(--glow);
+  transition: background .15s, border-color .15s;
+  box-shadow: none;
 }
-button:hover, .btn:hover { transform: translateY(-1px); box-shadow: 0 6px 28px -6px rgba(129, 140, 248, 0.6); }
-button:active, .btn:active { transform: translateY(0); }
+button:hover, .btn:hover { background: #6b76f2; }
+button:active, .btn:active { background: #515cdb; }
 button:disabled {
   background: var(--surface2); color: var(--muted);
-  cursor: not-allowed; box-shadow: none; transform: none;
+  cursor: not-allowed;
 }
 button.secondary, .btn.secondary {
   background: var(--surface2); color: var(--text);
@@ -239,19 +239,25 @@ label, h1, h2, h3, .gate-chip, .badge, .stat-card, .gallery-meta, .tabs,
 .stage-list li.running { color: var(--primary); font-weight: 600; }
 .stage-list li.failed { color: var(--error); }
 
-/* --- שערי איכות --- */
-.gates-row { display: flex; gap: 0.5rem; flex-wrap: wrap; margin: 1rem 0 1.4rem; }
+/* --- שערי איכות — צ'יפים מינימליים עם נקודת סטטוס --- */
+.gates-row { display: flex; gap: 0.4rem; flex-wrap: wrap; margin: 0.8rem 0 1.4rem; }
 .gate-chip {
-  padding: 0.3rem 0.85rem; border-radius: 99px;
-  font-size: 0.8rem; font-weight: 500; cursor: help;
-  border: 1px solid transparent;
-  -webkit-backdrop-filter: blur(4px);
-  backdrop-filter: blur(4px);
+  display: inline-flex; align-items: center; gap: 0.45rem;
+  padding: 0.28rem 0.75rem; border-radius: 99px;
+  font-size: 0.78rem; font-weight: 400; cursor: help;
+  color: var(--muted); background: var(--surface);
+  border: 1px solid var(--border);
 }
-.gate-chip.pass { color: #6ee7b7; background: rgba(52, 211, 153, 0.09); border-color: rgba(52, 211, 153, 0.25); }
-.gate-chip.warn { color: #fcd34d; background: rgba(251, 191, 36, 0.09); border-color: rgba(251, 191, 36, 0.25); }
-.gate-chip.fail { color: #fda4af; background: rgba(251, 113, 133, 0.10); border-color: rgba(251, 113, 133, 0.3); }
-.gate-chip.pending { color: var(--muted); background: var(--surface); border-color: var(--border); }
+.gate-chip::before {
+  content: ""; width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
+  background: var(--border-strong);
+}
+.gate-chip.pass { color: var(--text); }
+.gate-chip.pass::before { background: var(--ok); }
+.gate-chip.warn { color: #fcd34d; border-color: rgba(251, 191, 36, 0.3); }
+.gate-chip.warn::before { background: var(--warn); }
+.gate-chip.fail { color: #fda4af; border-color: rgba(251, 113, 133, 0.35); }
+.gate-chip.fail::before { background: var(--error); }
 
 /* --- viewer --- */
 .viewer-layout { display: grid; grid-template-columns: 1fr 330px; gap: 1.3rem; align-items: start; }
@@ -263,20 +269,34 @@ label, h1, h2, h3, .gate-chip, .badge, .stat-card, .gallery-meta, .tabs,
 }
 .side-panel { display: flex; flex-direction: column; gap: 1rem; }
 
-/* --- כרטיסי סיכום --- */
+/* --- פס סטטיסטיקה מאוחד --- */
+.stat-strip {
+  display: flex; background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); margin: 1.2rem 0; overflow: hidden;
+}
+.stat-strip > div {
+  flex: 1; padding: 1.05rem 1.2rem; text-align: center;
+  border-inline-start: 1px solid var(--border);
+}
+.stat-strip > div:first-child { border-inline-start: none; }
+.stat-strip b {
+  display: block; font-size: 1.35rem; font-weight: 600; color: var(--text);
+  letter-spacing: -0.01em; margin-bottom: 0.15rem;
+}
+.stat-strip span { color: var(--muted); font-size: 0.8rem; }
+
+/* --- גריד תמונות/כרטיסים כללי (נשמר לתאימות) --- */
 .stat-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.9rem; margin: 1.2rem 0; }
-.stat-card {
-  background: var(--surface); border: 1px solid var(--border);
-  border-radius: var(--radius); padding: 1.1rem 1rem; text-align: center;
-  box-shadow: var(--shadow);
+
+/* --- תמונות ממוזערות אחידות (תצוגות מקדימות) --- */
+.thumbs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.7rem; }
+.thumbs img {
+  width: 100%; aspect-ratio: 1; object-fit: cover; display: block;
+  border-radius: var(--radius-sm); background: var(--bg-deep);
+  border: 1px solid var(--border); cursor: zoom-in;
+  transition: border-color .15s;
 }
-.stat-card b {
-  display: block; font-size: 1.45rem; font-weight: 700; margin-bottom: 0.25rem;
-  background: var(--accent-grad);
-  -webkit-background-clip: text; background-clip: text;
-  -webkit-text-fill-color: transparent; color: transparent;
-}
-.stat-card span { color: var(--muted); font-size: 0.84rem; }
+.thumbs img:hover { border-color: var(--border-strong); }
 
 /* --- גלריה --- */
 .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(155px, 1fr)); gap: 0.9rem; }

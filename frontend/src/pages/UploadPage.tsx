@@ -2,7 +2,7 @@
 import { useCallback, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { api, thumbnailArtifact } from "../api";
+import { api, getDefaultProfileId, thumbnailArtifact } from "../api";
 
 type Tab = "image" | "multi" | "mesh";
 
@@ -21,7 +21,7 @@ export default function UploadPage() {
   const { data: jobs } = useQuery({ queryKey: ["jobs"], queryFn: api.listJobs });
 
   const create = useMutation({
-    mutationFn: (files: File[]) => api.createJob(files),
+    mutationFn: (files: File[]) => api.createJob(files, getDefaultProfileId() || undefined),
     onSuccess: (job) => nav(`/jobs/${job.id}`),
   });
 
@@ -41,9 +41,9 @@ export default function UploadPage() {
       </p>
 
       <div className="tabs">
-        <button className={tab === "image" ? "active" : ""} onClick={() => setTab("image")}>📷 תמונה בודדת</button>
-        <button className={tab === "multi" ? "active" : ""} onClick={() => setTab("multi")} title="פוטוגרמטריה — בקרוב (v1.5)">🎞️ ריבוי תמונות</button>
-        <button className={tab === "mesh" ? "active" : ""} onClick={() => setTab("mesh")}>🧊 קובץ 3D קיים</button>
+        <button className={tab === "image" ? "active" : ""} onClick={() => setTab("image")}>תמונה בודדת</button>
+        <button className={tab === "multi" ? "active" : ""} onClick={() => setTab("multi")} title="פוטוגרמטריה — בקרוב (v1.5)">ריבוי תמונות</button>
+        <button className={tab === "mesh" ? "active" : ""} onClick={() => setTab("mesh")}>קובץ 3D קיים</button>
       </div>
 
       <div className="split-2">
@@ -60,7 +60,7 @@ export default function UploadPage() {
               onDragLeave={() => setDrag(false)}
               onDrop={(e) => { e.preventDefault(); setDrag(false); onFiles(e.dataTransfer.files); }}
             >
-              <div className="big">{tab === "image" ? "📷" : "🧊"}</div>
+              <div className="big">+</div>
               <h3>{create.isPending ? "מעלה…" : "גרור לכאן או לחץ לבחירה"}</h3>
               <p className="muted">
                 {tab === "image"
@@ -77,7 +77,7 @@ export default function UploadPage() {
         </div>
 
         <div className="card">
-          <h3 style={{ marginTop: 0 }}>💡 טיפים לצילום מוצלח</h3>
+          <h3 style={{ marginTop: 0 }}>טיפים לצילום מוצלח</h3>
           <ul className="muted" style={{ lineHeight: 1.9 }}>
             <li>אור טבעי חזק ואחיד, בלי צללים קשים</li>
             <li>רקע חלק בצבע מנוגד לחפץ</li>
@@ -103,7 +103,9 @@ export default function UploadPage() {
                   <div className="gallery-thumb">
                     {preview
                       ? <img src={api.artifactUrl(preview.id)} alt="" loading="lazy" />
-                      : <span>{j.input_type === "mesh" ? "🧊" : "📷"}</span>}
+                      : <span className="muted" style={{ fontSize: "0.8rem", letterSpacing: "0.08em" }}>
+                          {j.input_type === "mesh" ? "3D" : "IMG"}
+                        </span>}
                   </div>
                   <div className="gallery-meta">
                     <span className="mono">{j.id}</span>

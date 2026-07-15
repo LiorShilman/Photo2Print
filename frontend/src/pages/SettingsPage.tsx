@@ -1,7 +1,8 @@
-// S-7 — הגדרות: פרופילי מדפסות + מידע מערכת
+// S-7 — הגדרות: מדפסת ברירת מחדל, פרופילי מדפסות, מידע מערכת
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api } from "../api";
+import { api, getDefaultProfileId, setDefaultProfileId } from "../api";
+import Select from "../components/Select";
 
 export default function SettingsPage() {
   const qc = useQueryClient();
@@ -11,6 +12,7 @@ export default function SettingsPage() {
     queryFn: async () => (await fetch("/api/v1/health")).json(),
   });
 
+  const [defaultProfile, setDefaultProfile] = useState(getDefaultProfileId());
   const [form, setForm] = useState({ name: "", bed_x: 220, bed_y: 220, bed_z: 250, nozzle_mm: 0.4 });
   const create = useMutation({
     mutationFn: async () => {
@@ -37,6 +39,22 @@ export default function SettingsPage() {
           {health?.mesh_provider === "local_extrude" &&
             <span className="muted"> (אקסטרוזיית צללית — ל-AI מלא הגדר מפתח Tripo/Meshy ב-.env)</span>}
         </p>
+      </div>
+
+      <h2>המדפסת שלי</h2>
+      <div className="card" style={{ maxWidth: 560 }}>
+        <label>מדפסת ברירת מחדל — תיבחר אוטומטית בכל ג'וב חדש</label>
+        <Select
+          value={defaultProfile}
+          onChange={(v) => { setDefaultProfile(v); setDefaultProfileId(v); }}
+          placeholder="בחר מדפסת…"
+          options={[
+            { value: "", label: "— ללא (בחירה ידנית בכל ג'וב) —" },
+            ...(profiles ?? []).map((p) => ({
+              value: p.id, label: p.name, hint: `${p.bed_x}×${p.bed_y}×${p.bed_z}`,
+            })),
+          ]}
+        />
       </div>
 
       <h2>פרופילי מדפסות</h2>

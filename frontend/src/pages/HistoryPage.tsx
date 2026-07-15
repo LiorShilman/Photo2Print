@@ -27,7 +27,7 @@ export default function HistoryPage() {
               <tr key={j.id}>
                 <td>{preview
                   ? <img src={api.artifactUrl(preview.id)} width={44} height={44} style={{ borderRadius: 8, objectFit: "cover" }} />
-                  : (j.input_type === "mesh" ? "🧊" : "📷")}</td>
+                  : <span className="muted" style={{ fontSize: "0.75rem" }}>{j.input_type === "mesh" ? "3D" : "IMG"}</span>}</td>
                 <td><Link to={`/jobs/${j.id}`} className="mono" style={{ color: "var(--accent)" }}>{j.id}</Link></td>
                 <td className="muted">{new Date(j.created_at).toLocaleString("he-IL")}</td>
                 <td>{{ image: "תמונה", multi_image: "ריבוי תמונות", mesh: "קובץ 3D" }[j.input_type] ?? j.input_type}</td>
@@ -35,11 +35,11 @@ export default function HistoryPage() {
                 <td><span className={`badge ${j.status === "done" ? "done" : j.status === "failed" ? "failed" : j.status.startsWith("awaiting") ? "waiting" : "working"}`}>{j.status}</span></td>
                 <td>
                   <div className="row" style={{ gap: "0.4rem" }}>
-                    {j.status === "done" && <a className="btn" style={{ padding: "0.25rem 0.7rem", fontSize: "0.85rem" }} href={api.downloadUrl(j.id)}>⬇</a>}
-                    <button className="secondary" style={{ padding: "0.25rem 0.7rem", fontSize: "0.85rem" }}
-                            onClick={() => dup.mutate(j.id)} title="שכפול">🔁</button>
-                    <button className="danger" style={{ padding: "0.25rem 0.7rem", fontSize: "0.85rem" }}
-                            onClick={() => { if (confirm(`למחוק את ${j.id}? כל הקבצים יימחקו.`)) del.mutate(j.id); }}>🗑</button>
+                    {j.status === "done" && <a className="btn secondary" style={{ padding: "0.25rem 0.7rem", fontSize: "0.82rem" }} href={api.downloadUrl(j.id)}>הורדה</a>}
+                    <button className="secondary" style={{ padding: "0.25rem 0.7rem", fontSize: "0.82rem" }}
+                            onClick={() => dup.mutate(j.id)}>שכפול</button>
+                    <button className="danger" style={{ padding: "0.25rem 0.7rem", fontSize: "0.82rem" }}
+                            onClick={() => { if (confirm(`למחוק את ${j.id}? כל הקבצים יימחקו.`)) del.mutate(j.id); }}>מחיקה</button>
                   </div>
                 </td>
               </tr>
