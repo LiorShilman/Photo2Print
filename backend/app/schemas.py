@@ -22,6 +22,12 @@ class ScaleRequest(BaseModel):
     profile_id: str | None = None  # מדפסת לבדיקת QG5 בשלב הסקייל
 
 
+class ColorChange(BaseModel):
+    """החלפת צבע בשכבה נתונה — מוזרקת כ-M600 (עצירה להחלפת חוט)."""
+    layer: int = Field(ge=1)
+    color: str = "#ffffff"  # לתצוגה ב-preview בלבד; המדפסת עוצרת והמשתמש מחליף
+
+
 class AdvancedSliceOptions(BaseModel):
     layer_height: float | None = Field(default=None, gt=0.04, le=0.6)
     infill_pct: int | None = Field(default=None, ge=0, le=100)
@@ -32,6 +38,7 @@ class AdvancedSliceOptions(BaseModel):
     perimeters: int | None = Field(default=None, ge=1, le=10)
     nozzle_temp: int | None = Field(default=None, ge=150, le=320)
     bed_temp: int | None = Field(default=None, ge=0, le=130)
+    color_changes: list[ColorChange] | None = None
 
 
 class SliceRequest(BaseModel):

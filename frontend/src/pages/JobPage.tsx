@@ -301,6 +301,20 @@ function ResultsView({ job }: { job: Job }) {
   const { data: profiles } = useQuery({ queryKey: ["profiles"], queryFn: api.listProfiles });
   const profile = profiles?.find((p) => p.id === job.profile_id);
   const [showSlice, setShowSlice] = useState(false);
+  const qc = useQueryClient();
+
+  // slice מחדש עם החלפות צבע (M600) — שומר את שאר הפרמטרים מהריצה האחרונה
+  const applyColors = useMutation({
+    mutationFn: (changes: { layer: number; color: string }[]) => {
+      const prev = (job.slice_json ?? {}) as Record<string, unknown>;
+      const advanced = { ...((prev.advanced as object) ?? {}), color_changes: changes };
+      return api.slice(job.id, { ...prev, advanced });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["job", job.id] });
+      qc.invalidateQueries({ queryKey: ["gcode_layers", job.id] });
+    },
+  });
 
   const t = stats?.time_s ?? 0;
   const timeStr = t >= 3600 ? `${Math.floor(t / 3600)}:${String(Math.floor((t % 3600) / 60)).padStart(2, "0")} שע'` : `${Math.round(t / 60)} דק'`;
@@ -349,9 +363,11 @@ function ResultsView({ job }: { job: Job }) {
 
       <div className="split-eq">
         <div>
-          <h2>Preview שכבות</h2>
+          <h2>Preview שכבות {stats?.color_changes?.length ? "· רב-צבעי 🎨" : ""}</h2>
           <GcodePreview jobId={job.id}
-                        bed={profile ? { x: profile.bed_x, y: profile.bed_y } : undefined} />
+                        bed={profile ? { x: profile.bed_x, y: profile.bed_y } : undefined}
+                        colorChanges={stats?.color_changes ?? []}
+                        onApplyColorChanges={(c) => applyColors.mutate(c)} />
         </div>
         {previews.length > 0 && (
           <div>

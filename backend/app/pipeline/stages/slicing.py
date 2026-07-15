@@ -216,6 +216,14 @@ def run(ctx: StageContext) -> dict:
         if problems:
             set_gate(ctx.job_id, "QG6", "fail", " · ".join(problems))
             raise GateFailure("QG6", "ה-G-code לא עבר בדיקת תקינות: " + " · ".join(problems))
+
+        # החלפות צבע (M600) — מוזרקות אחרי ולידציה, לא משנות גיאומטריה
+        color_changes = (advanced or {}).get("color_changes") or []
+        if color_changes:
+            from ..gcode_preview import insert_color_changes
+            n = insert_color_changes(gcode_path, [c["layer"] for c in color_changes])
+            meta["color_changes_inserted"] = n
+
         save_artifact(ctx.job_id, "gcode", gcode_path)
         for k in ("time_s", "filament_mm", "filament_g", "layers"):
             total[k] += meta[k]
@@ -230,7 +238,8 @@ def run(ctx: StageContext) -> dict:
     save_artifact(ctx.job_id, "slicer_ini", ini_path)
 
     stats = {**total, "cost": cost, "profile": profile.name, "preset": preset,
-             "material": material, "parts": part_stats if len(targets) > 1 else None}
+             "material": material, "parts": part_stats if len(targets) > 1 else None,
+             "color_changes": (advanced or {}).get("color_changes") or None}
     set_job(ctx.job_id, print_stats_json=stats, profile_id=profile.id)
 
     ctx.progress(100, "Slicing הושלם ואומת")

@@ -1,12 +1,33 @@
-// Preview שכבות G-code עם slider (F-7.7) — קנבס דו-ממדי מבט-על
+// Preview שכבות G-code עם slider (F-7.7) + אזורי צבע והחלפות M600
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 interface Layer { z: number; segments: number[][] }
+export interface ColorChange { layer: number; color: string }
 
-export default function GcodePreview({ jobId, bed }: { jobId: string; bed?: { x: number; y: number } }) {
+interface Props {
+  jobId: string;
+  bed?: { x: number; y: number };
+  colorChanges?: ColorChange[];                       // אזורי צבע קיימים (מה-slice האחרון)
+  onApplyColorChanges?: (changes: ColorChange[]) => void;  // slice מחדש עם ההחלפות
+}
+
+const BASE_COLOR = "#8b93ff";
+
+function zoneColor(layerIdx: number, changes: ColorChange[]): string {
+  // הצבע של שכבה = ההחלפה האחרונה שה-layer שלה ≤ אינדקס (1-based)
+  let color = BASE_COLOR;
+  for (const c of [...changes].sort((a, b) => a.layer - b.layer)) {
+    if (c.layer <= layerIdx + 1) color = c.color;
+  }
+  return color;
+}
+
+export default function GcodePreview({ jobId, bed, colorChanges = [], onApplyColorChanges }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [layerIdx, setLayerIdx] = useState(0);
+  const [pending, setPending] = useState<ColorChange[]>(colorChanges);
+  const [pickColor, setPickColor] = useState("#f472b6");
 
   const { data, isLoading } = useQuery({
     queryKey: ["gcode_layers", jobId],
@@ -21,10 +42,9 @@ export default function GcodePreview({ jobId, bed }: { jobId: string; bed?: { x:
   const layers = data?.layers ?? [];
 
   useEffect(() => {
-    if (layers.length) setLayerIdx(Math.min(layerIdx, layers.length - 1));
+    if (layers.length) setLayerIdx((i) => Math.min(i, layers.length - 1));
   }, [layers.length]);
 
-  // גבולות ציור — לפי המשטח או לפי תחום המודל
   const bounds = useMemo(() => {
     if (bed) return { minX: 0, minY: 0, maxX: bed.x, maxY: bed.y };
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
@@ -49,7 +69,7 @@ export default function GcodePreview({ jobId, bed }: { jobId: string; bed?: { x:
     ctx.fillStyle = "#141827";
     ctx.fillRect(0, 0, W, H);
 
-    if (bed) { // מסגרת משטח
+    if (bed) {
       ctx.strokeStyle = "#2a3046";
       ctx.lineWidth = 1;
       ctx.strokeRect(toX(0), toY(bed.y), bed.x * scale, bed.y * scale);
@@ -66,12 +86,14 @@ export default function GcodePreview({ jobId, bed }: { jobId: string; bed?: { x:
       ctx.stroke();
     };
 
-    if (layerIdx > 0) draw(layers[layerIdx - 1], "#818cf833", 1); // שכבה קודמת — עמומה
-    draw(layers[layerIdx], "#8b93ff", 1.6);
-  }, [layers, layerIdx, bounds, bed]);
+    if (layerIdx > 0) draw(layers[layerIdx - 1], zoneColor(layerIdx - 1, pending) + "33", 1);
+    draw(layers[layerIdx], zoneColor(layerIdx, pending), 1.6);
+  }, [layers, layerIdx, bounds, bed, pending]);
 
   if (isLoading) return <p className="muted">טוען שכבות…</p>;
   if (!layers.length) return null;
+
+  const dirty = JSON.stringify(pending) !== JSON.stringify(colorChanges);
 
   return (
     <div className="card" style={{ direction: "ltr" }}>
@@ -81,9 +103,53 @@ export default function GcodePreview({ jobId, bed }: { jobId: string; bed?: { x:
           שכבה {layerIdx + 1} מתוך {layers.length} · גובה{" "}
           <span className="mono">{layers[layerIdx].z.toFixed(2)} מ"מ</span>
         </label>
+        {/* פס אזורי צבע מתחת ל-slider */}
+        <div style={{ display: "flex", height: 6, borderRadius: 99, overflow: "hidden", direction: "ltr", margin: "0.2rem 0" }}>
+          {layers.map((_, i) => (
+            <div key={i} style={{ flex: 1, background: zoneColor(i, pending), opacity: i <= layerIdx ? 1 : 0.35 }} />
+          ))}
+        </div>
         <input type="range" min={0} max={layers.length - 1} value={layerIdx}
                onChange={(e) => setLayerIdx(Number(e.target.value))}
-               style={{ width: "100%" }} />
+               style={{ width: "100%", direction: "ltr" }} />
+
+        {onApplyColorChanges && (
+          <div style={{ marginTop: "0.7rem", borderTop: "1px solid var(--border)", paddingTop: "0.7rem" }}>
+            <div className="row" style={{ gap: "0.6rem" }}>
+              <input type="color" value={pickColor} onChange={(e) => setPickColor(e.target.value)}
+                     style={{ width: 42, height: 34, padding: 2, cursor: "pointer" }} />
+              <button className="secondary" style={{ padding: "0.35rem 0.9rem" }}
+                      onClick={() => setPending([...pending.filter((c) => c.layer !== layerIdx + 1),
+                                                 { layer: layerIdx + 1, color: pickColor }])}>
+                🎨 החלף צבע משכבה {layerIdx + 1}
+              </button>
+              {pending.length > 0 && (
+                <button className="secondary" style={{ padding: "0.35rem 0.9rem" }}
+                        onClick={() => setPending([])}>נקה הכל</button>
+              )}
+            </div>
+            {pending.length > 0 && (
+              <div className="row" style={{ marginTop: "0.5rem", gap: "0.4rem" }}>
+                {[...pending].sort((a, b) => a.layer - b.layer).map((c) => (
+                  <span key={c.layer} className="badge" style={{ background: c.color + "22", color: c.color, border: `1px solid ${c.color}55` }}>
+                    שכבה {c.layer}
+                    <span style={{ cursor: "pointer", marginInlineStart: 6 }}
+                          onClick={() => setPending(pending.filter((p) => p.layer !== c.layer))}>✕</span>
+                  </span>
+                ))}
+              </div>
+            )}
+            {dirty && (
+              <button style={{ marginTop: "0.7rem", width: "100%" }}
+                      onClick={() => onApplyColorChanges(pending)}>
+                ▶ החל החלפות צבע (Slicing מחדש עם M600)
+              </button>
+            )}
+            <p className="muted" style={{ fontSize: "0.78rem", marginTop: "0.5rem", marginBottom: 0 }}>
+              M600 עוצר את המדפסת בתחילת השכבה להחלפת חוט ידנית — נתמך ב-Prusa, Bambu, Marlin.
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );

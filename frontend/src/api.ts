@@ -59,6 +59,7 @@ export interface PrintStats {
   preset?: string;
   material?: string;
   parts?: PartStat[] | null;
+  color_changes?: { layer: number; color: string }[] | null;
   [k: string]: unknown;
 }
 

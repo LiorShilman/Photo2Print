@@ -75,6 +75,29 @@ def parse_layers(gcode_path: Path, max_segments_per_layer: int = 4000) -> list[d
     return layers
 
 
+def insert_color_changes(gcode_path: Path, layers: list[int]) -> int:
+    """הזרקת M600 (עצירה להחלפת חוט) בתחילת השכבות המבוקשות (1-based).
+
+    מחזיר כמה החלפות הוזרקו בפועל. M600 נתמך ב-Prusa/Bambu/Marlin מודרני.
+    """
+    wanted = sorted({n for n in layers if n >= 1})
+    if not wanted:
+        return 0
+    lines = gcode_path.read_text(encoding="utf-8", errors="replace").splitlines(keepends=True)
+    out: list[str] = []
+    layer_idx = 0
+    inserted = 0
+    for line in lines:
+        out.append(line)
+        if line.startswith(";LAYER_CHANGE"):
+            layer_idx += 1
+            if layer_idx in wanted:
+                out.append(f"M600 ; Photo2Print color change (layer {layer_idx})\n")
+                inserted += 1
+    gcode_path.write_text("".join(out), encoding="utf-8")
+    return inserted
+
+
 def render_first_layer_png(gcode_path: Path, out_path: Path, bed: tuple[float, float]):
     """שכבה ראשונה — קריטי לאבחון הצמדות (PRD §5.8)."""
     import matplotlib
