@@ -18,6 +18,8 @@ class ScaleRequest(BaseModel):
     rotation_deg: tuple[float, float, float] = (0, 0, 0)  # סיבוב ידני מה-gizmo
     auto_orient: bool = True
     flatten_base: bool = False
+    allow_split: bool = False  # חיתוך אוטומטי לחלקים אם המודל חורג מהמשטח
+    profile_id: str | None = None  # מדפסת לבדיקת QG5 בשלב הסקייל
 
 
 class AdvancedSliceOptions(BaseModel):

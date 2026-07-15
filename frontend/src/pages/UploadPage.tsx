@@ -2,7 +2,7 @@
 import { useCallback, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { api, latestArtifact } from "../api";
+import { api, thumbnailArtifact } from "../api";
 
 type Tab = "image" | "multi" | "mesh";
 
@@ -87,16 +87,25 @@ export default function UploadPage() {
       {recent.length > 0 && (
         <>
           <h2>נוצרו לאחרונה</h2>
-          <div className="stat-cards">
+          <div className="gallery">
             {recent.map((j) => {
-              const preview = latestArtifact(j, "preview");
+              const preview = thumbnailArtifact(j);
+              const badge = j.status === "done" ? "done" : j.status === "failed" ? "failed"
+                : j.status.startsWith("awaiting") ? "waiting" : "working";
+              const badgeText: Record<string, string> = {
+                done: "הושלם", failed: "נכשל", waiting: "ממתין לך", working: "מעבד",
+              };
               return (
-                <Link key={j.id} to={`/jobs/${j.id}`} className="stat-card" style={{ textDecoration: "none", color: "inherit" }}>
-                  {preview
-                    ? <img src={api.artifactUrl(preview.id)} alt="" style={{ width: "100%", borderRadius: 8 }} />
-                    : <div style={{ fontSize: "2rem" }}>{j.input_type === "mesh" ? "🧊" : "📷"}</div>}
-                  <span className="mono">{j.id}</span>
-                  <span className={`badge ${j.status === "done" ? "done" : j.status === "failed" ? "failed" : "working"}`}>{j.status}</span>
+                <Link key={j.id} to={`/jobs/${j.id}`} className="gallery-card">
+                  <div className="gallery-thumb">
+                    {preview
+                      ? <img src={api.artifactUrl(preview.id)} alt="" loading="lazy" />
+                      : <span>{j.input_type === "mesh" ? "🧊" : "📷"}</span>}
+                  </div>
+                  <div className="gallery-meta">
+                    <span className="mono">{j.id}</span>
+                    <span className={`badge ${badge}`}>{badgeText[badge]}</span>
+                  </div>
                 </Link>
               );
             })}

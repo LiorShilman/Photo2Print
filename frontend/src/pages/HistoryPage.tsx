@@ -1,7 +1,7 @@
 // S-6 — היסטוריית ג'ובים
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, latestArtifact } from "../api";
+import { api, thumbnailArtifact } from "../api";
 
 export default function HistoryPage() {
   const qc = useQueryClient();
@@ -22,7 +22,7 @@ export default function HistoryPage() {
         </thead>
         <tbody>
           {(jobs ?? []).map((j) => {
-            const preview = latestArtifact(j, "preview");
+            const preview = thumbnailArtifact(j);
             return (
               <tr key={j.id}>
                 <td>{preview

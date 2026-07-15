@@ -122,40 +122,8 @@ def compute_cost(meta: dict) -> dict:
     }
 
 
-def run(ctx: StageContext) -> dict:
-    from ...db import db_session
-    from ...models import Job, PrinterProfile
-
-    with db_session() as s:
-        job = s.get(Job, ctx.job_id)
-        slice_req = dict(job.slice_json or {})
-        profile = s.get(PrinterProfile, slice_req.get("profile_id") or job.profile_id)
-
-    if profile is None:
-        raise GateFailure("QG6", "לא נבחר פרופיל מדפסת")
-
-    slicer = settings.find_slicer()
-    if slicer is None:
-        raise GateFailure("QG6", "PrusaSlicer לא נמצא במערכת",
-                          ["הרץ את סקריפט ההתקנה או הגדר P2P_SLICER_PATH ב-.env"])
-
-    mesh_art = latest_artifact(ctx.job_id, "mesh_final") or latest_artifact(ctx.job_id, "mesh_repaired")
-    mesh_path = artifact_path(mesh_art)
-
-    preset = slice_req.get("preset", "standard")
-    material = slice_req.get("material", "PLA")
-    advanced = slice_req.get("advanced")
-
-    ctx.progress(10, f"בונה קונפיגורציית {profile.name} · {preset} · {material}…")
-    base_ini = PROJECT_ROOT / "backend" / "profiles" / profile.slicer_ini_base
-    ini_text = build_ini(base_ini, preset, material, advanced)
-    ini_path = ctx.work_dir / "slicer_config_used.ini"
-    ini_path.write_text(ini_text, encoding="utf-8")
-
-    safe_name = re.sub(r"[^\w\-]+", "_", profile.name.lower())
-    gcode_path = ctx.work_dir / f"print_{safe_name}_{preset}.gcode"
-
-    ctx.progress(25, "מריץ PrusaSlicer…")
+def _slice_one(slicer, ini_path, mesh_path, gcode_path) -> dict:
+    """הרצת סלייסר על קובץ אחד והחזרת מטא-דאטה. זורק GateFailure בכשל."""
     cmd = [str(slicer), "--export-gcode", "--load", str(ini_path),
            "--output", str(gcode_path), str(mesh_path)]
     try:
@@ -163,17 +131,15 @@ def run(ctx: StageContext) -> dict:
                               timeout=settings.slice_timeout)
     except subprocess.TimeoutExpired:
         raise GateFailure("QG6", f"ה-Slicer לא סיים בתוך {settings.slice_timeout} שניות")
-
     if proc.returncode != 0 or not gcode_path.exists():
         err = (proc.stderr or proc.stdout or "").strip()[-500:]
         raise GateFailure("QG6", f"ה-Slicer נכשל: {err}",
                           ["בדוק שהמודל בתחום המשטח", "נסה פריסט אחר"])
+    return parse_gcode_metadata(gcode_path)
 
-    ctx.progress(70, "מחלץ מטא-דאטה מה-G-code…")
-    meta = parse_gcode_metadata(gcode_path)
-    cost = compute_cost(meta)
 
-    # --- QG-6: G-code sanity ---
+def _sanity_problems(meta: dict, profile) -> list[str]:
+    """QG-6: זמן/חוט חיוביים, תנועות בתוך תחום המשטח."""
     problems = []
     if meta["time_s"] <= 0:
         problems.append("זמן הדפסה 0")
@@ -186,18 +152,85 @@ def run(ctx: StageContext) -> dict:
         problems.append(f"תנועות Y מחוץ לתחום ({meta['y_range']})")
     if meta["z_max"] > profile.bed_z + margin:
         problems.append(f"גובה Z {meta['z_max']} חורג מ-{profile.bed_z}")
+    return problems
 
-    if problems:
-        set_gate(ctx.job_id, "QG6", "fail", " · ".join(problems))
-        raise GateFailure("QG6", "ה-G-code לא עבר בדיקת תקינות: " + " · ".join(problems))
 
+def _latest_parts(job_id: str) -> list:
+    """כל חלקי המודל מהריצה האחרונה — dedupe לפי שם קובץ, החדש גובר."""
+    from ...db import db_session
+    from ...models import Artifact
+
+    with db_session() as s:
+        arts = (s.query(Artifact).filter_by(job_id=job_id, kind="mesh_part")
+                .order_by(Artifact.created_at.asc(), Artifact.id.asc()).all())
+    by_name = {a.filename: a for a in arts}
+    return [by_name[k] for k in sorted(by_name)]
+
+
+def run(ctx: StageContext) -> dict:
+    from ...db import db_session
+    from ...models import Job, PrinterProfile
+
+    with db_session() as s:
+        job = s.get(Job, ctx.job_id)
+        slice_req = dict(job.slice_json or {})
+        scale_req = dict(job.scale_json or {})
+        profile = s.get(PrinterProfile, slice_req.get("profile_id") or job.profile_id)
+
+    if profile is None:
+        raise GateFailure("QG6", "לא נבחר פרופיל מדפסת")
+
+    slicer = settings.find_slicer()
+    if slicer is None:
+        raise GateFailure("QG6", "PrusaSlicer לא נמצא במערכת",
+                          ["הרץ את סקריפט ההתקנה או הגדר P2P_SLICER_PATH ב-.env"])
+
+    preset = slice_req.get("preset", "standard")
+    material = slice_req.get("material", "PLA")
+    advanced = slice_req.get("advanced")
+
+    ctx.progress(10, f"בונה קונפיגורציית {profile.name} · {preset} · {material}…")
+    base_ini = PROJECT_ROOT / "backend" / "profiles" / profile.slicer_ini_base
+    ini_text = build_ini(base_ini, preset, material, advanced)
+    ini_path = ctx.work_dir / "slicer_config_used.ini"
+    ini_path.write_text(ini_text, encoding="utf-8")
+
+    safe_name = re.sub(r"[^\w\-]+", "_", profile.name.lower())
+
+    # חלקים מהחיתוך (אם המודל חולק) — אחרת המודל השלם
+    parts = _latest_parts(ctx.job_id) if scale_req.get("allow_split") else []
+    if parts:
+        targets = [(artifact_path(a), ctx.work_dir / f"print_{safe_name}_{preset}_part_{i:02d}.gcode")
+                   for i, a in enumerate(parts, start=1)]
+    else:
+        mesh_art = latest_artifact(ctx.job_id, "mesh_final") or latest_artifact(ctx.job_id, "mesh_repaired")
+        targets = [(artifact_path(mesh_art), ctx.work_dir / f"print_{safe_name}_{preset}.gcode")]
+
+    total = {"time_s": 0, "filament_mm": 0.0, "filament_g": 0.0, "layers": 0}
+    part_stats = []
+    for i, (mesh_path, gcode_path) in enumerate(targets, start=1):
+        ctx.progress(20 + int(60 * (i - 1) / len(targets)),
+                     f"מריץ PrusaSlicer… ({i}/{len(targets)})" if len(targets) > 1 else "מריץ PrusaSlicer…")
+        meta = _slice_one(slicer, ini_path, mesh_path, gcode_path)
+        problems = _sanity_problems(meta, profile)
+        if problems:
+            set_gate(ctx.job_id, "QG6", "fail", " · ".join(problems))
+            raise GateFailure("QG6", "ה-G-code לא עבר בדיקת תקינות: " + " · ".join(problems))
+        save_artifact(ctx.job_id, "gcode", gcode_path)
+        for k in ("time_s", "filament_mm", "filament_g", "layers"):
+            total[k] += meta[k]
+        part_stats.append({"file": gcode_path.name, "time_s": meta["time_s"],
+                           "filament_g": round(meta["filament_g"], 1), "layers": meta["layers"]})
+
+    cost = compute_cost(total)
     set_gate(ctx.job_id, "QG6", "pass",
-             f"{meta['layers']} שכבות · {meta['filament_g']:.0f} גרם · תקין")
+             f"{total['layers']} שכבות · {total['filament_g']:.0f} גרם · תקין"
+             + (f" · {len(targets)} חלקים" if len(targets) > 1 else ""))
 
-    save_artifact(ctx.job_id, "gcode", gcode_path)
     save_artifact(ctx.job_id, "slicer_ini", ini_path)
 
-    stats = {**meta, "cost": cost, "profile": profile.name, "preset": preset, "material": material}
+    stats = {**total, "cost": cost, "profile": profile.name, "preset": preset,
+             "material": material, "parts": part_stats if len(targets) > 1 else None}
     set_job(ctx.job_id, print_stats_json=stats, profile_id=profile.id)
 
     ctx.progress(100, "Slicing הושלם ואומת")

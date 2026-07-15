@@ -86,6 +86,8 @@ def set_scale(job_id: str, req: ScaleRequest, db: Session = Depends(get_db)):
     if job.status not in ("awaiting_scale", "awaiting_slice", "done", "failed"):
         raise HTTPException(409, f"הג'וב בסטטוס {job.status} — יש להמתין לסיום העיבוד")
     job.scale_json = req.model_dump()
+    if req.profile_id:
+        job.profile_id = req.profile_id  # מאפשר בדיקת QG5 כבר בשלב הסקייל
     job.status = "orienting"
     db.commit()
     enqueue(runner.run_scale, job_id)

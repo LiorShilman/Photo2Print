@@ -42,6 +42,13 @@ export interface Job {
   artifacts: Artifact[];
 }
 
+export interface PartStat {
+  file: string;
+  time_s: number;
+  filament_g: number;
+  layers: number;
+}
+
 export interface PrintStats {
   time_s: number;
   filament_mm: number;
@@ -51,6 +58,7 @@ export interface PrintStats {
   profile?: string;
   preset?: string;
   material?: string;
+  parts?: PartStat[] | null;
   [k: string]: unknown;
 }
 
@@ -133,4 +141,13 @@ export const api = {
 
 export function latestArtifact(job: Job, kind: string): Artifact | undefined {
   return [...job.artifacts].reverse().find((a) => a.kind === kind);
+}
+
+export function thumbnailArtifact(job: Job): Artifact | undefined {
+  // תמונה ממוזערת עקבית: תצוגת front > כל preview סטטי אחר (לא GIF)
+  const previews = job.artifacts.filter((a) => a.kind === "preview");
+  return (
+    previews.find((a) => a.filename.includes("front")) ??
+    previews.find((a) => a.filename.endsWith(".png"))
+  );
 }

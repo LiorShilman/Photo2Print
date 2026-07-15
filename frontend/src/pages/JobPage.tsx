@@ -89,8 +89,17 @@ function ProgressView({ job, progressPct, message }: { job: Job; progressPct: nu
 
 function FailedView({ job }: { job: Job }) {
   const failedStage = job.stages.find((s) => s.status === "failed");
-  const suggestions = (failedStage?.error_json?.suggestions_he as string[] | undefined) ?? [];
+  const errorJson = failedStage?.error_json as { gate?: string; suggestions_he?: string[] } | null;
+  const suggestions = errorJson?.suggestions_he ?? [];
+  const qc = useQueryClient();
   const dup = useMutation({ mutationFn: () => api.duplicate(job.id) });
+
+  // QG5 (חריגה מהמשטח) — הצעת חיתוך אוטומטי לחלקים
+  const isBedOverflow = errorJson?.gate === "QG5" && !!job.scale_json;
+  const split = useMutation({
+    mutationFn: () => api.scale(job.id, { ...job.scale_json, allow_split: true }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["job", job.id] }),
+  });
 
   return (
     <div className="error-box">
@@ -99,9 +108,15 @@ function FailedView({ job }: { job: Job }) {
         <ul>{suggestions.map((s, i) => <li key={i}>{s}</li>)}</ul>
       )}
       <div className="row" style={{ marginTop: "0.8rem" }}>
+        {isBedOverflow && (
+          <button onClick={() => split.mutate()} disabled={split.isPending}>
+            {split.isPending ? "חותך…" : "🪚 חתוך לחלקים אוטומטית"}
+          </button>
+        )}
         <button className="secondary" onClick={() => dup.mutate()}>🔁 נסה שוב (ג'וב חדש)</button>
         {dup.data && <a className="btn" href={`/jobs/${dup.data.id}`}>לג'וב החדש</a>}
       </div>
+      {split.isError && <p style={{ color: "var(--error)" }}>{(split.error as Error).message}</p>}
     </div>
   );
 }
@@ -139,6 +154,7 @@ function ScaleView({ job }: { job: Job }) {
     mutationFn: () => api.scale(job.id, {
       axis, size_mm: sizeMm, auto_orient: autoOrient, flatten_base: flatten,
       rotation_deg: rot,
+      profile_id: profileId || job.profile_id || null,
     }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["job", job.id] }),
   });
@@ -298,9 +314,32 @@ function ResultsView({ job }: { job: Job }) {
         <div className="stat-card"><b>{stats?.layers ?? "?"}</b><span>🥞 שכבות</span></div>
       </div>
 
+      {stats?.parts && stats.parts.length > 1 && (
+        <div className="card" style={{ margin: "1rem 0", borderColor: "var(--warn)" }}>
+          <b>🪚 המודל חולק ל-{stats.parts.length} חלקים</b> — כל חלק מודפס בנפרד ומודבק בסיום.
+          <table className="jobs" style={{ marginTop: "0.5rem" }}>
+            <thead><tr><th>קובץ</th><th>זמן</th><th>חוט</th><th>שכבות</th><th></th></tr></thead>
+            <tbody>
+              {stats.parts.map((p) => {
+                const art = job.artifacts.filter((a) => a.kind === "gcode" && a.filename === p.file).pop();
+                return (
+                  <tr key={p.file}>
+                    <td className="mono" style={{ fontSize: "0.8rem" }}>{p.file}</td>
+                    <td>{Math.round(p.time_s / 60)} דק'</td>
+                    <td>{p.filament_g} גרם</td>
+                    <td>{p.layers}</td>
+                    <td>{art && <a className="btn" style={{ padding: "0.2rem 0.7rem", fontSize: "0.85rem" }} href={api.artifactUrl(art.id)}>⬇</a>}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
       <div className="row" style={{ margin: "1rem 0" }}>
         <a className="btn" href={api.downloadUrl(job.id)}>⬇️ הורד חבילה מלאה (ZIP)</a>
-        {gcode && <a className="btn secondary" style={{ background: "var(--surface2)", color: "var(--text)" }} href={api.artifactUrl(gcode.id)}>G-code בלבד</a>}
+        {gcode && !stats?.parts && <a className="btn secondary" style={{ background: "var(--surface2)", color: "var(--text)" }} href={api.artifactUrl(gcode.id)}>G-code בלבד</a>}
         {mesh && <a className="btn secondary" style={{ background: "var(--surface2)", color: "var(--text)" }} href={api.artifactUrl(mesh.id)}>STL בלבד</a>}
         {report && <a className="btn secondary" style={{ background: "var(--surface2)", color: "var(--text)" }} href={api.artifactUrl(report.id)} target="_blank">📄 דוח מלא</a>}
         <button className="secondary" onClick={() => setShowSlice(true)}>🔁 שכפל עם פרופיל אחר</button>

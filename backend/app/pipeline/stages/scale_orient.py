@@ -84,6 +84,42 @@ def min_wall_thickness_estimate(mesh, samples: int = 400) -> float:
         return float("inf")  # מנוע ray לא זמין — לא חוסמים
 
 
+def split_for_bed(mesh, bed: tuple[float, float, float]) -> list:
+    """חיתוך מודל שחורג מהמשטח לחלקים מודפסים (Phase 4 — F-5.3).
+
+    חותך במישורים ניצבים לציר החורג ביותר, שוב ושוב, עד שכל חלק נכנס
+    למשטח (עם שולי ביטחון 2%). כל חלק נסגר (cap) כדי להישאר watertight.
+    """
+    import numpy as np
+
+    margin = 0.98
+    parts = [mesh]
+    for _ in range(8):  # הגנה מלולאה אינסופית
+        oversized = [(i, p) for i, p in enumerate(parts)
+                     if any(p.extents[a] > bed[a] * margin for a in range(3))]
+        if not oversized:
+            break
+        idx, part = oversized[0]
+        ratios = [part.extents[a] / bed[a] for a in range(3)]
+        axis = int(np.argmax(ratios))
+        normal = np.zeros(3)
+        normal[axis] = 1.0
+        mid = (part.bounds[0][axis] + part.bounds[1][axis]) / 2
+        origin = part.bounds[0].copy()
+        origin[axis] = mid
+        lower = part.slice_plane(origin, -normal, cap=True)
+        upper = part.slice_plane(origin, normal, cap=True)
+        halves = [h for h in (lower, upper) if h is not None and len(h.faces) > 10]
+        if len(halves) < 2:
+            break  # חיתוך נכשל — עוצרים ומדווחים על מה שיש
+        parts[idx:idx + 1] = halves
+
+    # כל חלק מונח על המשטח וממורכז
+    for p in parts:
+        p.apply_translation([-p.centroid[0], -p.centroid[1], -p.bounds[0][2]])
+    return parts
+
+
 def run(ctx: StageContext) -> dict:
     import trimesh
 
@@ -140,23 +176,39 @@ def run(ctx: StageContext) -> dict:
 
     dims = [round(float(d), 2) for d in mesh.extents]
 
-    # --- QG-5: התאמה לנפח ההדפסה ---
+    # --- QG-5: התאמה לנפח ההדפסה (+ חיתוך לחלקים אם הותר) ---
     ctx.progress(70, "בודק התאמה למשטח ההדפסה…")
+    parts: list = []
     if profile:
         bed = (profile.bed_x, profile.bed_y, profile.bed_z)
         if dims[0] > bed[0] or dims[1] > bed[1] or dims[2] > bed[2]:
-            max_factor = min(bed[0] / dims[0], bed[1] / dims[1], bed[2] / dims[2])
-            max_mm = round(target_mm * max_factor * 0.98, 1)
-            set_gate(ctx.job_id, "QG5", "fail",
-                     f"המודל ({dims[0]}×{dims[1]}×{dims[2]} מ\"מ) חורג מהמשטח {bed[0]}×{bed[1]}×{bed[2]}")
-            raise GateFailure(
-                "QG5",
-                f"המודל גדול ממשטח ההדפסה של {profile.name}",
-                [f"הקטן את המידה ל-{max_mm} מ\"מ לכל היותר",
-                 "או בחר מדפסת עם משטח גדול יותר"],
-            )
-        set_gate(ctx.job_id, "QG5", "pass",
-                 f"{dims[0]}×{dims[1]}×{dims[2]} מ\"מ — מתאים ל-{profile.name}")
+            if scale_req.get("allow_split"):
+                ctx.progress(75, "המודל גדול מהמשטח — חותך לחלקים…")
+                parts = split_for_bed(mesh, bed)
+                still_oversized = [p for p in parts
+                                   if any(p.extents[a] > bed[a] for a in range(3))]
+                if len(parts) < 2 or still_oversized:
+                    set_gate(ctx.job_id, "QG5", "fail", "החיתוך לחלקים נכשל")
+                    raise GateFailure("QG5", "לא הצלחתי לחלק את המודל לחלקים שנכנסים למשטח",
+                                      ["הקטן את המידה", "בחר מדפסת גדולה יותר"])
+                set_gate(ctx.job_id, "QG5", "warn",
+                         f"המודל חולק ל-{len(parts)} חלקים שיודפסו בנפרד (נדרשת הדבקה)",
+                         parts=len(parts))
+            else:
+                max_factor = min(bed[0] / dims[0], bed[1] / dims[1], bed[2] / dims[2])
+                max_mm = round(target_mm * max_factor * 0.98, 1)
+                set_gate(ctx.job_id, "QG5", "fail",
+                         f"המודל ({dims[0]}×{dims[1]}×{dims[2]} מ\"מ) חורג מהמשטח {bed[0]}×{bed[1]}×{bed[2]}")
+                raise GateFailure(
+                    "QG5",
+                    f"המודל גדול ממשטח ההדפסה של {profile.name}",
+                    [f"הקטן את המידה ל-{max_mm} מ\"מ לכל היותר",
+                     "חתוך לחלקים אוטומטית (כפתור במסך)",
+                     "או בחר מדפסת עם משטח גדול יותר"],
+                )
+        else:
+            set_gate(ctx.job_id, "QG5", "pass",
+                     f"{dims[0]}×{dims[1]}×{dims[2]} מ\"מ — מתאים ל-{profile.name}")
     else:
         set_gate(ctx.job_id, "QG5", "warn", "לא נבחר פרופיל מדפסת — הבדיקה תרוץ לפני slicing")
 
@@ -177,7 +229,15 @@ def run(ctx: StageContext) -> dict:
     mesh.export(out)
     save_artifact(ctx.job_id, "mesh_final", out)
 
-    ctx.progress(100, f"מוכן: {dims[0]}×{dims[1]}×{dims[2]} מ\"מ")
+    # חלקים (אם חולק) — כל אחד כארטיפקט נפרד ל-slicing פרטני
+    for i, p in enumerate(parts, start=1):
+        part_path = ctx.work_dir / f"model_part_{i:02d}.stl"
+        p.export(part_path)
+        save_artifact(ctx.job_id, "mesh_part", part_path)
+
+    ctx.progress(100, f"מוכן: {dims[0]}×{dims[1]}×{dims[2]} מ\"מ" +
+                 (f" · {len(parts)} חלקים" if parts else ""))
     return {"dims_mm": dims, "scale_factor": round(factor, 4),
+            "parts": len(parts) or None,
             "orient_score": None if orient_score is None else round(orient_score, 2),
             "min_wall_mm": None if min_wall == float("inf") else round(min_wall, 2)}

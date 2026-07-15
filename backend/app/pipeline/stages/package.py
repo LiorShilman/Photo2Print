@@ -42,11 +42,14 @@ def render_previews(mesh_path: Path, out_dir: Path, on_progress) -> list[Path]:
         coll.set_facecolor(face_colors)
         ax.add_collection3d(coll)
         lo, hi = mesh.bounds
-        center, radius = (lo + hi) / 2, max(hi - lo) / 2 * 1.1
+        # 0.62 — הפרויקציה התלת-ממדית של matplotlib מוסיפה שוליים משלה;
+        # רדיוס הדוק ממלא את הפריים בלי לחתוך את המודל
+        center, radius = (lo + hi) / 2, max(hi - lo) / 2 * 0.62
         for axis_set, c in zip((ax.set_xlim, ax.set_ylim, ax.set_zlim), center):
             axis_set(c - radius, c + radius)
         ax.view_init(elev=elev, azim=azim)
         ax.set_axis_off()
+        fig.subplots_adjust(left=0, right=1, top=1, bottom=0)
         fig.savefig(out, dpi=dpi, bbox_inches="tight", facecolor="#0d1117")
         plt.close(fig)
 
@@ -218,9 +221,13 @@ def run(ctx: StageContext) -> dict:
 
         _add("mesh_final", "model/model_repaired.stl")
         _add("mesh_raw", "model/model_original_raw" + Path(latest_artifact(ctx.job_id, 'mesh_raw').filename).suffix)
-        gcode = latest_artifact(ctx.job_id, "gcode")
-        if gcode:
-            z.write(artifact_path(gcode), f"print/{gcode.filename}")
+        # כל קבצי ה-G-code (מודל שלם או ריבוי חלקים) — dedupe לפי שם, החדש גובר
+        from ...models import Artifact
+        with db_session() as s:
+            gcode_arts = (s.query(Artifact).filter_by(job_id=ctx.job_id, kind="gcode")
+                          .order_by(Artifact.created_at.asc(), Artifact.id.asc()).all())
+        for art in {a.filename: a for a in gcode_arts}.values():
+            z.write(artifact_path(art), f"print/{art.filename}")
         _add("slicer_ini", "print/slicer_config_used.ini")
         for p in previews:
             z.write(p, f"previews/{p.name}")
