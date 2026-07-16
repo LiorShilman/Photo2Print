@@ -119,6 +119,6 @@ def render_first_layer_png(gcode_path: Path, out_path: Path, bed: tuple[float, f
     ax.set_ylim(-5, bed[1] + 5)
     ax.set_aspect("equal")
     ax.axis("off")
-    fig.savefig(out_path, dpi=110, bbox_inches="tight", facecolor="#131622")
+    fig.savefig(out_path, dpi=160, bbox_inches="tight", facecolor="#131622")
     plt.close(fig)
     return True

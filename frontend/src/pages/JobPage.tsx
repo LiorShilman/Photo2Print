@@ -409,7 +409,21 @@ function ResultsView({ job }: { job: Job }) {
         </div>
         {previews.length > 0 && (
           <div>
-            <h2>תצוגות מקדימות <span className="muted" style={{ fontSize: "0.8rem", fontWeight: 400 }}>· לחיצה מגדילה</span></h2>
+            <h2>
+              תצוגות מקדימות <span className="muted" style={{ fontSize: "0.8rem", fontWeight: 400 }}>· תמונות שטוחות, לחיצה מגדילה</span>
+              {mesh && (
+                <>
+                  {" · "}
+                  <a href="#viewer-3d" style={{ fontSize: "0.8rem", fontWeight: 400 }}
+                     onClick={(e) => {
+                       e.preventDefault();
+                       document.getElementById("viewer-3d")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                     }}>
+                    צפייה תלת-ממדית אינטראקטיבית ↓
+                  </a>
+                </>
+              )}
+            </h2>
             <div className="thumbs">
               {previews.map((p) => (
                 <img key={p.id} src={api.artifactUrl(p.id)} alt={p.filename}
@@ -423,10 +437,12 @@ function ResultsView({ job }: { job: Job }) {
       {lightbox && <Lightbox src={lightbox} onClose={() => setLightbox(null)} />}
 
       {mesh && (
-        <>
-          <h2>המודל הסופי{stats?.color_changes?.length ? " · צבוע לפי ההחלפות" : ""}</h2>
+        <div id="viewer-3d" style={{ scrollMarginTop: "1.5rem" }}>
+          <h2>המודל הסופי{stats?.color_changes?.length ? " · צבוע לפי ההחלפות" : ""}
+            {" "}<span className="muted" style={{ fontSize: "0.8rem", fontWeight: 400 }}>· גררו לסיבוב, גלגלת לזום אמיתי על הגיאומטריה</span>
+          </h2>
           <Viewer3D stlUrl={api.artifactUrl(mesh.id)} colorZones={colorZones} />
-        </>
+        </div>
       )}
     </>
   );

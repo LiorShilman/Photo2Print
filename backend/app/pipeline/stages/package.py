@@ -49,7 +49,7 @@ def render_quick_thumb(mesh_path: Path, out_path: Path):
     ax.view_init(elev=28, azim=45)
     ax.set_axis_off()
     fig.subplots_adjust(left=0, right=1, top=1, bottom=0)
-    fig.savefig(out_path, dpi=80, bbox_inches="tight", facecolor="#131622")
+    fig.savefig(out_path, dpi=130, bbox_inches="tight", facecolor="#131622")
     plt.close(fig)
 
 
@@ -84,7 +84,7 @@ def render_previews(mesh_path: Path, out_dir: Path, on_progress,
             face_base[centers_z >= zone["z"] - 1e-4] = _hex_rgb(zone["color"])
     face_colors = np.clip(intensity[:, None] * face_base, 0, 1)
 
-    def _render(elev: float, azim: float, out: Path, size: float = 6, dpi: int = 100):
+    def _render(elev: float, azim: float, out: Path, size: float = 6, dpi: int = 170):
         fig = plt.figure(figsize=(size, size), facecolor="#131622")
         ax = fig.add_subplot(111, projection="3d", facecolor="#131622")
         coll = Poly3DCollection(tris, alpha=1.0)
@@ -115,7 +115,7 @@ def render_previews(mesh_path: Path, out_dir: Path, on_progress,
     frames = []
     for k in range(18):
         frame_path = out_dir / f"_tt_{k}.png"
-        _render(18, k * 20, frame_path, size=4, dpi=70)
+        _render(18, k * 20, frame_path, size=4, dpi=100)
         frames.append(PILImage.open(frame_path).convert("P", palette=PILImage.ADAPTIVE))
     gif_path = out_dir / "model_turntable.gif"
     frames[0].save(gif_path, save_all=True, append_images=frames[1:],
