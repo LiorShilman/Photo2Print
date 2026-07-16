@@ -17,6 +17,42 @@ def _hex_rgb(hex_color: str) -> "np.ndarray":
     return np.array([int(h[i:i + 2], 16) for i in (0, 2, 4)]) / 255.0
 
 
+def render_quick_thumb(mesh_path: Path, out_path: Path):
+    """תמונה ממוזערת מהירה (iso) מיד אחרי התיקון — כדי שהגלריה תמיד חיה."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    import trimesh
+    from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+
+    mesh = trimesh.load(str(mesh_path), force="mesh")
+    if len(mesh.faces) > 15_000:
+        try:
+            mesh = mesh.simplify_quadric_decimation(face_count=12_000)
+        except Exception:
+            pass
+    light = np.array([0.4, -0.6, 0.7])
+    light = light / np.linalg.norm(light)
+    intensity = 0.35 + 0.65 * np.clip(mesh.face_normals @ light, 0, 1)
+    base = np.array([0x81, 0x8c, 0xf8]) / 255.0
+    colors = np.clip(intensity[:, None] * base[None, :], 0, 1)
+
+    fig = plt.figure(figsize=(3.4, 3.4), facecolor="#131622")
+    ax = fig.add_subplot(111, projection="3d", facecolor="#131622")
+    coll = Poly3DCollection(mesh.triangles, alpha=1.0)
+    coll.set_facecolor(colors)
+    ax.add_collection3d(coll)
+    lo, hi = mesh.bounds
+    center, radius = (lo + hi) / 2, max(hi - lo) / 2 * 0.62
+    for axis_set, c in zip((ax.set_xlim, ax.set_ylim, ax.set_zlim), center):
+        axis_set(c - radius, c + radius)
+    ax.view_init(elev=28, azim=45)
+    ax.set_axis_off()
+    fig.subplots_adjust(left=0, right=1, top=1, bottom=0)
+    fig.savefig(out_path, dpi=80, bbox_inches="tight", facecolor="#131622")
+    plt.close(fig)
+
+
 def render_previews(mesh_path: Path, out_dir: Path, on_progress,
                     zones: list[dict] | None = None) -> list[Path]:
     """רנדור סטטי headless עם matplotlib — עמיד יותר מ-GL בשרת ללא תצוגה."""

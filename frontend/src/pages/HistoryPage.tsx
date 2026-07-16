@@ -2,6 +2,7 @@
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, thumbnailArtifact } from "../api";
+import { IconCube, IconImage } from "../components/icons";
 
 export default function HistoryPage() {
   const qc = useQueryClient();
@@ -27,7 +28,7 @@ export default function HistoryPage() {
               <tr key={j.id}>
                 <td>{preview
                   ? <img src={api.artifactUrl(preview.id)} width={44} height={44} style={{ borderRadius: 8, objectFit: "cover" }} />
-                  : <span className="muted" style={{ fontSize: "0.75rem" }}>{j.input_type === "mesh" ? "3D" : "IMG"}</span>}</td>
+                  : <span style={{ color: "#4a5170" }}>{j.input_type === "mesh" ? <IconCube size={26} /> : <IconImage size={26} />}</span>}</td>
                 <td><Link to={`/jobs/${j.id}`} className="mono" style={{ color: "var(--accent)" }}>{j.id}</Link></td>
                 <td className="muted">{new Date(j.created_at).toLocaleString("he-IL")}</td>
                 <td>{{ image: "תמונה", multi_image: "ריבוי תמונות", mesh: "קובץ 3D" }[j.input_type] ?? j.input_type}</td>

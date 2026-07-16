@@ -160,11 +160,13 @@ export function setDefaultProfileId(id: string) {
 }
 
 export function thumbnailArtifact(job: Job): Artifact | undefined {
-  // תמונה ממוזערת עקבית: hero איזומטרי > front > כל preview סטטי אחר (לא GIF)
-  const previews = job.artifacts.filter((a) => a.kind === "preview");
+  // עדיפות: iso האחרון (הסופי הצבעוני גובר על thumb המוקדם) > front > כל PNG >
+  // התמונה המעובדת (לג'ובים מתמונה שטרם הגיעו למודל)
+  const previews = [...job.artifacts.filter((a) => a.kind === "preview")].reverse();
   return (
     previews.find((a) => a.filename.includes("iso")) ??
     previews.find((a) => a.filename.includes("front")) ??
-    previews.find((a) => a.filename.endsWith(".png"))
+    previews.find((a) => a.filename.endsWith(".png")) ??
+    [...job.artifacts].reverse().find((a) => a.kind === "image_processed")
   );
 }

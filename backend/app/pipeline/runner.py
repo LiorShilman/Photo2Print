@@ -9,13 +9,15 @@ import logging
 import traceback
 
 from ..jobqueue import progress_bus
-from .context import GateFailure, StageContext, set_job
+from .context import GateFailure, JobDeleted, StageContext, set_job
 from .stages import ingest, mesh_generation, mesh_repair, package, preprocess, scale_orient, slicing
 
 logger = logging.getLogger("p2p.runner")
 
 
 def _fail_job(job_id: str, ctx: StageContext | None, exc: Exception):
+    if isinstance(exc, JobDeleted):
+        return  # המשתמש מחק את הג'וב באמצע ריצה — אין למי לדווח
     if isinstance(exc, GateFailure):
         error = {
             "gate": exc.gate,
@@ -27,9 +29,12 @@ def _fail_job(job_id: str, ctx: StageContext | None, exc: Exception):
         error = {"message_he": "שגיאה פנימית בעיבוד", "detail": str(exc)}
         message_he = f"שגיאה: {exc}"
         logger.error("Pipeline failed for %s:\n%s", job_id, traceback.format_exc())
-    if ctx is not None:
-        ctx.fail(error)
-    set_job(job_id, status="failed", error_he=message_he)
+    try:
+        if ctx is not None:
+            ctx.fail(error)
+        set_job(job_id, status="failed", error_he=message_he)
+    except JobDeleted:
+        return
     progress_bus.publish(job_id, {
         "job_id": job_id, "status": "failed", "stage": ctx.stage_name if ctx else "?",
         "stage_index": ctx.stage_index if ctx else 0, "total_stages": 8,
@@ -39,7 +44,10 @@ def _fail_job(job_id: str, ctx: StageContext | None, exc: Exception):
 
 def run_generation(job_id: str):
     """מקטע A — מהעלאה ועד mesh מתוקן. בסיום: awaiting_scale."""
-    set_job(job_id, status="running", error_he=None)
+    try:
+        set_job(job_id, status="running", error_he=None)
+    except JobDeleted:
+        return
     steps = [
         ("ingest", 1, ingest.run),
         ("preprocess", 2, preprocess.run),
@@ -56,6 +64,19 @@ def run_generation(job_id: str):
                 ctx.finish(metrics)
                 continue
             ctx.finish(metrics)
+
+        # תמונה ממוזערת מוקדמת — הגלריה מציגה את המודל עוד לפני slicing
+        try:
+            from ..storage import artifact_path, latest_artifact, save_artifact
+            from .stages.package import render_quick_thumb
+            repaired = latest_artifact(job_id, "mesh_repaired")
+            if repaired:
+                thumb = ctx.work_dir / "thumb_iso.png"
+                render_quick_thumb(artifact_path(repaired), thumb)
+                save_artifact(job_id, "preview", thumb)
+        except Exception:
+            logger.warning("early thumbnail failed for %s", job_id, exc_info=True)
+
         set_job(job_id, status="awaiting_scale")
         progress_bus.publish(job_id, {
             "job_id": job_id, "status": "awaiting_scale", "stage": "mesh_repair",
@@ -68,7 +89,10 @@ def run_generation(job_id: str):
 
 def run_scale(job_id: str):
     """מקטע B — סקייל, אוריינטציה ושערי QG4/QG5. בסיום: awaiting_slice."""
-    set_job(job_id, status="orienting", error_he=None)
+    try:
+        set_job(job_id, status="orienting", error_he=None)
+    except JobDeleted:
+        return
     ctx = StageContext(job_id, "scale_orient", 5)
     try:
         ctx.start()
@@ -86,7 +110,10 @@ def run_scale(job_id: str):
 
 def run_slice(job_id: str):
     """מקטע C — slicing, QG6 ואריזה. בסיום: done."""
-    set_job(job_id, status="slicing", error_he=None)
+    try:
+        set_job(job_id, status="slicing", error_he=None)
+    except JobDeleted:
+        return
     ctx = None
     try:
         ctx = StageContext(job_id, "slicing", 7)

@@ -3,6 +3,7 @@ import { useCallback, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { api, getDefaultProfileId, thumbnailArtifact } from "../api";
+import { IconCube, IconImage, IconUpload } from "../components/icons";
 
 type Tab = "image" | "multi" | "mesh";
 
@@ -60,7 +61,9 @@ export default function UploadPage() {
               onDragLeave={() => setDrag(false)}
               onDrop={(e) => { e.preventDefault(); setDrag(false); onFiles(e.dataTransfer.files); }}
             >
-              <div className="big">+</div>
+              <div className="big" style={{ color: "#a5b4fc" }}>
+                <IconUpload size={30} />
+              </div>
               <h3>{create.isPending ? "מעלה…" : "גרור לכאן או לחץ לבחירה"}</h3>
               <p className="muted">
                 {tab === "image"
@@ -103,8 +106,8 @@ export default function UploadPage() {
                   <div className="gallery-thumb">
                     {preview
                       ? <img src={api.artifactUrl(preview.id)} alt="" loading="lazy" />
-                      : <span className="muted" style={{ fontSize: "0.8rem", letterSpacing: "0.08em" }}>
-                          {j.input_type === "mesh" ? "3D" : "IMG"}
+                      : <span style={{ color: "#4a5170" }}>
+                          {j.input_type === "mesh" ? <IconCube size={34} /> : <IconImage size={34} />}
                         </span>}
                   </div>
                   <div className="gallery-meta">

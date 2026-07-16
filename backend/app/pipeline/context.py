@@ -10,6 +10,14 @@ from ..jobqueue import progress_bus
 from ..models import Job, JobStage
 
 
+class JobDeleted(Exception):
+    """הג'וב נמחק ע"י המשתמש באמצע ריצה — הצנרת נעצרת בשקט."""
+
+    def __init__(self, job_id: str):
+        super().__init__(f"job {job_id} deleted mid-run")
+        self.job_id = job_id
+
+
 class GateFailure(Exception):
     """כשל שער איכות — עוצר את הצנרת עם הסבר בעברית (Zero-Guess Policy)."""
 
@@ -47,7 +55,10 @@ class StageContext:
 
     # --- עדכוני DB ---
 
-    def _get_or_create_stage(self, s) -> JobStage:
+    def _get_or_create_stage(self, s) -> JobStage | None:
+        # הג'וב עלול להימחק ע"י המשתמש באמצע ריצה — במקרה כזה אין מה לעדכן
+        if s.get(Job, self.job_id) is None:
+            return None
         st = (
             s.query(JobStage)
             .filter_by(job_id=self.job_id, stage_name=self.stage_name)
@@ -65,6 +76,8 @@ class StageContext:
     def start(self):
         with db_session() as s:
             st = self._get_or_create_stage(s)
+            if st is None:
+                raise JobDeleted(self.job_id)
             st.status = "running"
             st.started_at = datetime.now(timezone.utc)
             st.error_json = None
@@ -73,6 +86,8 @@ class StageContext:
     def finish(self, metrics: dict[str, Any] | None = None):
         with db_session() as s:
             st = self._get_or_create_stage(s)
+            if st is None:
+                raise JobDeleted(self.job_id)
             st.status = "done"
             st.finished_at = datetime.now(timezone.utc)
             if metrics:
@@ -81,6 +96,8 @@ class StageContext:
     def fail(self, error: dict[str, Any]):
         with db_session() as s:
             st = self._get_or_create_stage(s)
+            if st is None:
+                return  # הג'וב נמחק — אין למי לדווח כשל
             st.status = "failed"
             st.finished_at = datetime.now(timezone.utc)
             st.error_json = error
@@ -90,8 +107,10 @@ class StageContext:
     def progress(self, pct: int, message_he: str):
         with db_session() as s:
             job = s.get(Job, self.job_id)
-            gates = dict(job.gates_json or {}) if job else {}
-            status = job.status if job else "unknown"
+            if job is None:
+                raise JobDeleted(self.job_id)
+            gates = dict(job.gates_json or {})
+            status = job.status
         progress_bus.publish(self.job_id, {
             "job_id": self.job_id,
             "status": status,
@@ -107,6 +126,8 @@ class StageContext:
 def set_job(job_id: str, **fields):
     with db_session() as s:
         job = s.get(Job, job_id)
+        if job is None:
+            raise JobDeleted(job_id)
         for k, v in fields.items():
             setattr(job, k, v)
 
