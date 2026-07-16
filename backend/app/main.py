@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .db import init_db
 from .jobqueue import progress_bus
+from .recovery import recover_orphaned_jobs
 from .routers import artifacts, jobs, profiles
 from .seed import seed_profiles
 
@@ -18,6 +19,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname
 async def lifespan(app: FastAPI):
     init_db()
     seed_profiles()
+    recover_orphaned_jobs()
     progress_bus.attach_loop(asyncio.get_running_loop())
     yield
 
