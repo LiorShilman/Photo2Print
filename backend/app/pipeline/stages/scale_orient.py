@@ -146,21 +146,24 @@ def run(ctx: StageContext) -> dict:
                 mesh.apply_transform(
                     trimesh.transformations.rotation_matrix(np.radians(deg), axis_vec))
 
-    # --- סקייל לפי ציר נבחר (F-5.1) ---
+    # --- אוריינטציה אוטומטית (F-5.4) — לפני הסקייל בכוונה.
+    # הבחירה בין 26 הכיוונים תלויה רק בצורת המודל (יחסי שטחים), לא בגודלו,
+    # ולכן לא מושפעת מסקייל אחיד. אם נסקלל קודם, "ציר Z" של המשתמש עלול
+    # להתחלף בציר אחר אחרי הסיבוב האוטומטי — והמידה שביקש לא תתממש בפועל.
+    orient_score = None
+    if scale_req.get("auto_orient", True):
+        ctx.progress(30, "מחשב אוריינטציית הדפסה אופטימלית (26 כיוונים)…")
+        mesh, orient_score = auto_orient(mesh)
+
+    # --- סקייל לפי ציר נבחר (F-5.1) — כעת ביחס לאוריינטציה הסופית ---
     axis = AXIS_INDEX[scale_req.get("axis", "z")]
     target_mm = float(scale_req["size_mm"])
     current = float(mesh.extents[axis])
     if current <= 0:
         raise GateFailure("QG5", "מידת הציר הנבחר היא אפס")
     factor = target_mm / current
-    ctx.progress(30, f"מסקלל פי {factor:.3f} ליעד {target_mm} מ\"מ…")
+    ctx.progress(45, f"מסקלל פי {factor:.3f} ליעד {target_mm} מ\"מ…")
     mesh.apply_scale(factor)
-
-    # --- אוריינטציה אוטומטית (F-5.4) ---
-    orient_score = None
-    if scale_req.get("auto_orient", True):
-        ctx.progress(45, "מחשב אוריינטציית הדפסה אופטימלית (26 כיוונים)…")
-        mesh, orient_score = auto_orient(mesh)
 
     # --- השטחת בסיס אופציונלית (F-5.6) ---
     if scale_req.get("flatten_base"):
