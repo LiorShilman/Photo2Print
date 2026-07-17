@@ -1,0 +1,18 @@
+# Shap-E — ספק טקסט-ל-3D מקומי, ללא API key (backend/app/pipeline/providers/shap_e.py).
+# תלות כבדה ואופציונלית — לא כלולה ב-requirements.txt הרגיל.
+#
+# אם יש לך GPU של NVIDIA: התקן torch עם תמיכת CUDA *לפני* הקובץ הזה, לפי הבחירה
+# המתאימה בכתובת https://pytorch.org/get-started/locally/ — אחרת תתקבל גרסת
+# torch כללית (לרוב CPU-only) והריצה תהיה איטית משמעותית (דקות לג'וב).
+#
+# התקנה: .venv\Scripts\pip.exe install -r requirements-shape3d.txt
+# אם ההתקנה נכשלת: שכפל את הריפו ידנית והרץ בתוכו `pip install -e .`
+# (ראה https://github.com/openai/shap-e)
+#
+# חשוב: pip install של shap-e "רגיל" עלול לדרוס מחדש את torch עם build כללי
+# (לא CUDA) כי setup.py של shap-e לא נועל גרסה. אם כבר התקנת torch עם CUDA
+# ידנית, התקן את שתי השורות הבאות עם --no-deps כדי שההתקנה לא תיגע ב-torch:
+#   pip install --no-deps git+https://github.com/openai/shap-e.git
+#   pip install ipywidgets   # תלות נוספת של shap_e.util.notebooks, לא מוצהרת ב-setup.py
+git+https://github.com/openai/shap-e.git
+ipywidgets

@@ -13,7 +13,7 @@ STL מתוקן ואטום → G-code מוכן למדפסת → דוח עלויו
 ```
 
 הסקריפט מתקין הכל בפעם הראשונה (venv + npm) ופותח:
-- **UI:** http://localhost:5173 (עברית RTL, dark mode)
+- **UI:** http://localhost:5183 (עברית RTL, dark mode)
 - **API:** http://localhost:8008 (OpenAPI: `/docs`)
 
 דרישות: Python 3.12+, Node 18+. PrusaSlicer CLI כלול ב-`tools/` (מורד אוטומטית).
@@ -34,6 +34,7 @@ STL מתוקן ואטום → G-code מוכן למדפסת → דוח עלויו
 | `tripo` | `TRIPO_API_KEY` ב-.env | image-to-3D מלא (מומלץ) |
 | `meshy` | `MESHY_API_KEY` ב-.env | image-to-3D מלא (fallback) |
 | `local_extrude` | כלום (ברירת מחדל) | אקסטרוזיית צללית — דמו/רליף בלבד |
+| `shap_e` | `pip install -r backend/requirements-shape3d.txt` (torch, כבד) | טקסט-ל-3D מקומי, איכות בינונית, ללא מפתח |
 
 החלפה: `P2P_MESH_PROVIDER=tripo` ב-.env. Fallback: `P2P_MESH_FALLBACK_PROVIDER=meshy`.
 

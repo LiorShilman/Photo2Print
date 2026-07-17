@@ -1,21 +1,23 @@
 """שלב 3 — יצירת Mesh דרך אבסטרקציית ספקים, כולל retry ו-fallback (F-3.1..F-3.6)."""
 import time
+from typing import Callable
 
 from ...config import settings
 from ...schemas import GenOptions
 from ...storage import artifact_path, latest_artifact, save_artifact
 from ..context import GateFailure, StageContext, set_gate, set_job
-from ..providers import ProviderError, get_provider
+from ..providers import MeshProvider, ProviderError, RawMeshResult, get_provider
 
 MAX_RETRIES = 2
 
 
-def _try_provider(name: str, ctx: StageContext, image_path, opts) -> "RawMeshResult | None":
-    """הרצת ספק עם עד 2 נסיונות חוזרים ו-backoff."""
+def _try_provider(name: str, ctx: StageContext,
+                  call: Callable[["MeshProvider"], "RawMeshResult"]) -> "RawMeshResult | None":
+    """הרצת ספק עם עד 2 נסיונות חוזרים ו-backoff. call() מפעילה generate/generate_from_text."""
     for attempt in range(1 + MAX_RETRIES):
         try:
             provider = get_provider(name)
-            return provider.generate(image_path, ctx.work_dir, opts, ctx.progress)
+            return call(provider)
         except ProviderError as e:
             if not e.retryable or attempt == MAX_RETRIES:
                 ctx.progress(5, f"ספק {name} נכשל: {e.message_he}")
@@ -43,17 +45,53 @@ def run(ctx: StageContext) -> dict:
         ctx.progress(100, "משתמש בקובץ התלת-ממד שהועלה")
         return {"skipped_ai": True}
 
-    image = latest_artifact(ctx.job_id, "image_processed")
-    image_path = artifact_path(image)
+    if input_type == "lithophane":
+        import numpy as np
+        from PIL import Image
+
+        from .. import lithophane
+        from ...schemas import LithophaneOptions
+
+        with db_session() as s:
+            opts = LithophaneOptions.model_validate(s.get(Job, ctx.job_id).lithophane_json or {})
+
+        ctx.progress(20, "בונה תבליט ליתופן מהתמונה…")
+        image = latest_artifact(ctx.job_id, "image_processed")
+        gray = np.asarray(Image.open(artifact_path(image)))
+        builder = lithophane.build_cylindrical if opts.shape == "cylindrical" else lithophane.build_flat
+        kwargs = {"min_thickness_mm": opts.min_thickness_mm, "max_thickness_mm": opts.max_thickness_mm,
+                  "invert": opts.invert}
+        if opts.shape == "cylindrical":
+            kwargs["wrap_deg"] = opts.wrap_deg
+        mesh = builder(gray, **kwargs)
+
+        out = ctx.work_dir / "model_raw_lithophane.stl"
+        mesh.export(out)
+        save_artifact(ctx.job_id, "mesh_raw", out)
+        set_job(ctx.job_id, source_provider="lithophane_local", ai_confidence=1.0)
+        set_gate(ctx.job_id, "QG2", "pass", "ליתופן מקומי — ללא AI")
+        ctx.progress(100, f"תבליט ליתופן ({opts.shape}) נוצר")
+        return {"shape": opts.shape, "faces": len(mesh.faces)}
+
     opts = GenOptions()
+    if input_type == "text":
+        prompt = (job.text_prompt or "").strip()
+        if not prompt:
+            raise GateFailure("QG2", "לא סופק תיאור טקסטואלי")
+        call: Callable[[MeshProvider], RawMeshResult] = \
+            lambda p: p.generate_from_text(prompt, ctx.work_dir, opts, ctx.progress)
+    else:
+        image = latest_artifact(ctx.job_id, "image_processed")
+        image_path = artifact_path(image)
+        call = lambda p: p.generate(image_path, ctx.work_dir, opts, ctx.progress)
 
     primary = settings.mesh_provider
     fallback = settings.mesh_fallback_provider
 
-    result = _try_provider(primary, ctx, image_path, opts)
+    result = _try_provider(primary, ctx, call)
     if result is None and fallback and fallback != primary:
         ctx.progress(8, f"עובר לספק גיבוי: {fallback}")
-        result = _try_provider(fallback, ctx, image_path, opts)
+        result = _try_provider(fallback, ctx, call)
 
     if result is None:
         raise GateFailure(

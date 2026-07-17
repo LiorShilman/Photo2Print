@@ -32,9 +32,22 @@ def get_engine():
     return _engine
 
 
+def _add_column_if_missing(table: str, column: str, ddl_type: str):
+    """create_all לא מוסיף עמודות לטבלה קיימת ב-SQLite — ALTER TABLE שקט לשדרוגים."""
+    engine = get_engine()
+    with engine.connect() as conn:
+        try:
+            conn.exec_driver_sql(f"ALTER TABLE {table} ADD COLUMN {column} {ddl_type}")
+            conn.commit()
+        except Exception:
+            pass  # העמודה כבר קיימת
+
+
 def init_db():
     from . import models  # noqa: F401 — רישום טבלאות
     Base.metadata.create_all(get_engine())
+    _add_column_if_missing("jobs", "lithophane_json", "TEXT")
+    _add_column_if_missing("jobs", "text_prompt", "TEXT")
 
 
 @contextmanager

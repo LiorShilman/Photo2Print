@@ -22,12 +22,14 @@ class Job(Base):
     id: Mapped[str] = mapped_column(String(20), primary_key=True, default=lambda: _uid("j"))
     # pending → running → awaiting_scale → orienting → awaiting_slice → slicing → done | failed
     status: Mapped[str] = mapped_column(String(24), default="pending", index=True)
-    input_type: Mapped[str] = mapped_column(String(16))  # image | multi_image | mesh
+    input_type: Mapped[str] = mapped_column(String(16))  # image | multi_image | mesh | lithophane | text
+    text_prompt: Mapped[str | None] = mapped_column(Text, nullable=True)  # אם input_type="text"
     source_provider: Mapped[str | None] = mapped_column(String(32), nullable=True)
     image_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     ai_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
     error_he: Mapped[str | None] = mapped_column(Text, nullable=True)
     gates_json: Mapped[dict] = mapped_column(JSON, default=dict)          # {"QG1": {"status": "pass", ...}}
+    lithophane_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # אפשרויות ליתופן (אם input_type="lithophane")
     scale_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # קלט המשתמש האחרון
     slice_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # פרמטרי slicing אחרונים
     print_stats_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)

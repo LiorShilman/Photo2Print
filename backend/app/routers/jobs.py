@@ -4,6 +4,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
+from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from ..config import settings
@@ -11,7 +12,7 @@ from ..db import get_db
 from ..jobqueue import enqueue
 from ..models import Artifact, Job
 from ..pipeline import runner
-from ..schemas import JobOut, ScaleRequest, SliceRequest
+from ..schemas import JobOut, LithophaneOptions, ScaleRequest, SliceRequest, TextJobRequest
 from ..storage import artifact_path, delete_job_files, save_artifact_bytes
 
 router = APIRouter(prefix="/api/v1/jobs", tags=["jobs"])
@@ -36,6 +37,8 @@ def _detect_input_type(files: list[UploadFile]) -> str:
 async def create_job(
     files: list[UploadFile],
     profile_id: str | None = Form(default=None),
+    mode: str | None = Form(default=None),
+    lithophane_options: str | None = Form(default=None),
     db: Session = Depends(get_db),
 ):
     if not files:
@@ -43,6 +46,17 @@ async def create_job(
     input_type = _detect_input_type(files)
     if input_type == "multi_image":
         raise HTTPException(400, "מסלול ריבוי תמונות (פוטוגרמטריה) יגיע בגרסה 1.5")
+
+    lithophane_json = None
+    if mode == "lithophane":
+        if input_type != "image":
+            raise HTTPException(400, "מצב ליתופן דורש תמונה בודדת")
+        input_type = "lithophane"
+        try:
+            opts = LithophaneOptions.model_validate_json(lithophane_options) if lithophane_options else LithophaneOptions()
+        except ValidationError as e:
+            raise HTTPException(400, f"אפשרויות ליתופן לא תקינות: {e}")
+        lithophane_json = opts.model_dump()
 
     # קריאת הקבצים לפני יצירת הרשומה — ולידציית גודל מוקדמת
     max_bytes = settings.max_upload_mb * 1024 * 1024
@@ -53,12 +67,24 @@ async def create_job(
             raise HTTPException(413, f"הקובץ {f.filename} גדול מ-{settings.max_upload_mb}MB")
         payloads.append((f"upload_{i}{Path(f.filename or 'file').suffix.lower()}", data))
 
-    job = Job(input_type=input_type, profile_id=profile_id, status="pending")
+    job = Job(input_type=input_type, profile_id=profile_id, status="pending",
+              lithophane_json=lithophane_json)
     db.add(job)
     db.commit()  # הארטיפקטים נשמרים בסשן נפרד — הג'וב חייב להיות persist קודם (FK)
 
     for safe, data in payloads:
         save_artifact_bytes(job.id, "upload", safe, data)
+    enqueue(runner.run_generation, job.id)
+    return _job_out(db, job.id)
+
+
+@router.post("/text", response_model=JobOut, status_code=201)
+def create_text_job(req: TextJobRequest, db: Session = Depends(get_db)):
+    """טקסט-ל-3D — ג'וב בלי קבצים, דורש ספק שתומך ב-generate_from_text (Tripo/Meshy)."""
+    job = Job(input_type="text", profile_id=req.profile_id, status="pending",
+              text_prompt=req.prompt.strip())
+    db.add(job)
+    db.commit()
     enqueue(runner.run_generation, job.id)
     return _job_out(db, job.id)
 

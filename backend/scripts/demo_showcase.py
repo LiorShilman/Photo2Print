@@ -142,7 +142,7 @@ def main():
                              {"layer": 41, "color": "#fbbf24"}])
     run_model(client, "gear", make_gear(), bambu["id"], 10, preset="draft")
 
-    print("\n✅ DEMO READY — פתח את http://localhost:5173 לגלריה")
+    print("\n✅ DEMO READY — פתח את http://localhost:5183 לגלריה")
 
 
 if __name__ == "__main__":

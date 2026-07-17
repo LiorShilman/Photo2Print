@@ -57,12 +57,25 @@ def run(ctx: StageContext) -> dict:
 
     with db_session() as s:
         input_type = s.get(Job, ctx.job_id).input_type
-    if input_type == "mesh":
-        ctx.progress(100, "קובץ תלת-ממד קיים — מדלג על עיבוד תמונה")
+    if input_type in ("mesh", "text"):
+        ctx.progress(100, "אין תמונה בקלט — מדלג על עיבוד תמונה")
         return {"skipped": True}
 
     upload = latest_artifact(ctx.job_id, "upload")
     src = artifact_path(upload)
+
+    if input_type == "lithophane":
+        ctx.progress(20, "טוען תמונה ומתקן סיבוב EXIF…")
+        im = Image.open(src)
+        im = ImageOps.exif_transpose(im).convert("L")
+        LITHO_MAX_SIDE = 300
+        ratio = LITHO_MAX_SIDE / max(im.size)
+        im = im.resize((max(1, round(im.width * ratio)), max(1, round(im.height * ratio))), Image.LANCZOS)
+        out = ctx.work_dir / "image_processed.png"
+        im.save(out)
+        save_artifact(ctx.job_id, "image_processed", out)
+        ctx.progress(100, f"תמונה מוכנה לליתופן — {im.width}×{im.height}")
+        return {"litho_size": [im.width, im.height]}
 
     ctx.progress(10, "טוען תמונה ומתקן סיבוב EXIF…")
     im = Image.open(src)

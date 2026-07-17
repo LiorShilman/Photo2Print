@@ -1,5 +1,5 @@
-# Photo2Print — הפעלת סביבת פיתוח מלאה (ללא Docker)
-# מריץ API על :8000 ו-Frontend על :5173 בשני חלונות
+﻿# Photo2Print — הפעלת סביבת פיתוח מלאה (ללא Docker)
+# מריץ API על :8008 ו-Frontend על :5183 בשני חלונות
 $root = $PSScriptRoot
 
 if (-not (Test-Path "$root\backend\.venv")) {
@@ -16,10 +16,10 @@ if (-not (Test-Path "$root\.env")) {
     Write-Host "נוצר .env מברירת המחדל — ערוך אותו להוספת מפתחות API" -ForegroundColor Yellow
 }
 
-Write-Host "מפעיל API (http://localhost:8008) ו-UI (http://localhost:5173)..." -ForegroundColor Green
+Write-Host "מפעיל API (http://localhost:8008) ו-UI (http://localhost:5183)..." -ForegroundColor Green
 Start-Process powershell -ArgumentList "-NoExit", "-Command",
     "& '$root\backend\.venv\Scripts\python.exe' -m uvicorn app.main:app --reload --port 8008 --app-dir '$root\backend'"
 Start-Process powershell -ArgumentList "-NoExit", "-Command",
     "Set-Location '$root\frontend'; npm run dev"
 Start-Sleep 3
-Start-Process "http://localhost:5173"
+Start-Process "http://localhost:5183"

@@ -19,6 +19,10 @@ def run(ctx: StageContext) -> dict:
         input_type = job.input_type
         uploads = s.query(Artifact).filter_by(job_id=ctx.job_id, kind="upload").all()
 
+    if input_type == "text":
+        ctx.progress(100, "בקשת טקסט-ל-3D — אין קבצים לאמת")
+        return {"input_type": input_type}
+
     if not uploads:
         raise GateFailure("QG0", "לא נמצאו קבצים שהועלו")
 
@@ -29,7 +33,7 @@ def run(ctx: StageContext) -> dict:
         size_mb = path.stat().st_size / (1024 * 1024)
         ext = path.suffix.lower()
 
-        if input_type in ("image", "multi_image"):
+        if input_type in ("image", "multi_image", "lithophane"):
             if size_mb > settings.max_image_mb:
                 raise GateFailure("QG0", f"התמונה {art.filename} גדולה מ-{settings.max_image_mb}MB")
             kind = filetype.guess(str(path))

@@ -37,16 +37,28 @@ class MeshProvider(ABC):
     ) -> RawMeshResult:
         """מחזיר mesh גולמי + confidence, או זורק ProviderError."""
 
+    def generate_from_text(
+        self,
+        prompt: str,
+        out_dir: Path,
+        opts: GenOptions,
+        on_progress: Callable[[int, str], None],
+    ) -> RawMeshResult:
+        """טקסט-ל-3D — לא כל ספק תומך; ברירת המחדל זורקת שגיאה ברורה."""
+        raise ProviderError(f"ספק {self.name} אינו תומך בטקסט-ל-3D", retryable=False)
+
 
 def get_provider(name: str) -> MeshProvider:
     from .local_extrude import LocalExtrudeProvider
     from .meshy import MeshyProvider
+    from .shap_e import ShapEProvider
     from .tripo import TripoProvider
 
     registry: dict[str, type[MeshProvider]] = {
         "tripo": TripoProvider,
         "meshy": MeshyProvider,
         "local_extrude": LocalExtrudeProvider,
+        "shap_e": ShapEProvider,
     }
     if name not in registry:
         raise ProviderError(f"ספק לא מוכר: {name}", retryable=False)

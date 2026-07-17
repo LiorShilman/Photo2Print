@@ -19,6 +19,11 @@ data/
 # Tools (downloaded binaries)
 tools/
 
+# Shap-E model weights (~3GB, downloaded on first use — see requirements-shape3d.txt)
+shap_e_model_cache/
+backend/shap_e_model_cache/
+.venv.stale-remnant-delete-later/
+
 # IDE
 .vscode/
 .idea/

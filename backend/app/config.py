@@ -20,6 +20,7 @@ class Settings(BaseSettings):
 
     mesh_provider: str = "local_extrude"
     mesh_fallback_provider: str = ""
+    shape3d_device: str = ""  # ריק=זיהוי אוטומטי, או "cpu"/"cuda" לכפייה (ספק shap_e)
 
     slicer_path: str = ""
 

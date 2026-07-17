@@ -98,12 +98,30 @@ async function check(res: Response) {
   return res;
 }
 
+export interface LithophaneOptions {
+  shape: "flat" | "cylindrical";
+  invert: boolean;
+  wrap_deg: number;
+  min_thickness_mm: number;
+  max_thickness_mm: number;
+}
+
 export const api = {
-  async createJob(files: File[], profileId?: string): Promise<Job> {
+  async createJob(files: File[], profileId?: string, lithophaneOptions?: LithophaneOptions): Promise<Job> {
     const fd = new FormData();
     files.forEach((f) => fd.append("files", f));
     if (profileId) fd.append("profile_id", profileId);
+    if (lithophaneOptions) {
+      fd.append("mode", "lithophane");
+      fd.append("lithophane_options", JSON.stringify(lithophaneOptions));
+    }
     return (await check(await fetch("/api/v1/jobs", { method: "POST", body: fd }))).json();
+  },
+  async createJobFromText(prompt: string, profileId?: string): Promise<Job> {
+    return (await check(await fetch("/api/v1/jobs/text", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt, profile_id: profileId || null }),
+    }))).json();
   },
   async getJob(id: string): Promise<Job> {
     return (await check(await fetch(`/api/v1/jobs/${id}`))).json();

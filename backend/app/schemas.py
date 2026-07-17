@@ -12,6 +12,19 @@ class GenOptions(BaseModel):
     symmetry_hint: bool | None = None
 
 
+class TextJobRequest(BaseModel):
+    prompt: str = Field(min_length=3, max_length=2000)
+    profile_id: str | None = None
+
+
+class LithophaneOptions(BaseModel):
+    shape: Literal["flat", "cylindrical"] = "flat"
+    invert: bool = False
+    wrap_deg: float = Field(default=200.0, gt=10, le=350)
+    min_thickness_mm: float = Field(default=0.8, gt=0.1, le=5)
+    max_thickness_mm: float = Field(default=3.2, gt=0.2, le=8)
+
+
 class ScaleRequest(BaseModel):
     axis: Literal["x", "y", "z"] = "z"
     size_mm: float = Field(gt=0.1, le=2000)
