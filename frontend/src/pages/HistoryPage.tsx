@@ -18,6 +18,8 @@ function statusGroup(status: string): StatusFilter {
 export default function HistoryPage() {
   const qc = useQueryClient();
   const [filter, setFilter] = useState<StatusFilter>("all");
+  const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [confirmAll, setConfirmAll] = useState(false);
   const { data: jobs } = useQuery({ queryKey: ["jobs"], queryFn: api.listJobs });
   const del = useMutation({
     mutationFn: api.deleteJob,
@@ -35,6 +37,27 @@ export default function HistoryPage() {
     [jobs, filter],
   );
 
+  // אישור בלחיצה כפולה בתוך הדף עצמו — בלי להסתמך על confirm() של הדפדפן,
+  // שנחסם באופן שקוף בחלק מהדפדפנים/סביבות ה-webview
+  const askDeleteOne = (id: string) => {
+    if (confirmId === id) {
+      setConfirmId(null);
+      del.mutate(id);
+    } else {
+      setConfirmId(id);
+      setTimeout(() => setConfirmId((cur) => (cur === id ? null : cur)), 4000);
+    }
+  };
+  const askDeleteAll = () => {
+    if (confirmAll) {
+      setConfirmAll(false);
+      delAll.mutate(filtered.map((j) => j.id));
+    } else {
+      setConfirmAll(true);
+      setTimeout(() => setConfirmAll((cur) => (cur ? false : cur)), 4000);
+    }
+  };
+
   return (
     <>
       <div className="row" style={{ alignItems: "baseline", justifyContent: "space-between" }}>
@@ -49,13 +72,8 @@ export default function HistoryPage() {
                     { value: "working", label: "בעיבוד" },
                   ]} />
           {filtered.length > 0 && (
-            <button className="danger" disabled={delAll.isPending}
-                    onClick={() => {
-                      if (confirm(`למחוק ${filtered.length} ג'ובים? כל הקבצים שלהם יימחקו לצמיתות.`)) {
-                        delAll.mutate(filtered.map((j) => j.id));
-                      }
-                    }}>
-              {delAll.isPending ? "מוחק…" : `מחק הכל (${filtered.length})`}
+            <button className="danger" disabled={delAll.isPending} onClick={askDeleteAll}>
+              {delAll.isPending ? "מוחק…" : confirmAll ? "בטוח? לחצו שוב לאישור" : `מחק הכל (${filtered.length})`}
             </button>
           )}
         </div>
@@ -83,7 +101,9 @@ export default function HistoryPage() {
                     <button className="secondary" style={{ padding: "0.25rem 0.7rem", fontSize: "0.82rem" }}
                             onClick={() => dup.mutate(j.id)}>שכפול</button>
                     <button className="danger" style={{ padding: "0.25rem 0.7rem", fontSize: "0.82rem" }}
-                            onClick={() => { if (confirm(`למחוק את ${j.id}? כל הקבצים יימחקו.`)) del.mutate(j.id); }}>מחיקה</button>
+                            onClick={() => askDeleteOne(j.id)}>
+                      {confirmId === j.id ? "בטוח?" : "מחיקה"}
+                    </button>
                   </div>
                 </td>
               </tr>
